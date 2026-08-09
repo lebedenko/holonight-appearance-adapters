@@ -1,0 +1,3 @@
+Checks: 'bugprone-*,performance-*,portability-*,-portability-avoid-pragma-once'
+WarningsAsErrors: '*'
+HeaderFilterRegex: '.*holonight-appearance-adapters/(include|src)/.*'

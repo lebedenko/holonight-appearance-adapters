@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: lebedenko/holonight-config
+          ref: 5cd36ec9986801c4b831527a38e7b7414b9a1312
+          path: provider-config
+      - uses: actions/checkout@v4
+        with:
+          repository: lebedenko/holonight-qt
+          ref: fb0acc6520802d8f9c014bc9042b71b79d8c6d9a
+          path: provider-qt
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build clang-format clang-tidy libgtest-dev libjson-glib-dev libgtk-3-dev libgtk-4-dev libtomlplusplus-dev xvfb dbus-x11
+      - name: Install Qt 6.11
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.11.*'
+          arch: linux_gcc_64
+          cache: true
+      - name: Build pinned providers
+        run: |
+          cmake -S provider-config -B provider-config/build -G Ninja -DBUILD_TESTING=OFF
+          cmake --build provider-config/build
+          cmake --install provider-config/build --prefix "$RUNNER_TEMP/providers"
+          cmake -S provider-qt -B provider-qt/build -G Ninja -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="$RUNNER_TEMP/providers"
+          cmake --build provider-qt/build
+          cmake --install provider-qt/build --prefix "$RUNNER_TEMP/providers"
+      - name: Configure and build
+        run: |
+          cmake -S . -B build -G Ninja -DBUILD_TESTING=ON -DHOLONIGHT_QT_DIR="$RUNNER_TEMP/providers" -DHOLONIGHT_CONFIG_DIR="$RUNNER_TEMP/providers"
+          cmake --build build
+      - name: Verify
+        run: |
+          ctest --test-dir build --output-on-failure
+          cmake --build build --target format-check
+          cmake --build build --target tidy

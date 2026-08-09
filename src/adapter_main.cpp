@@ -296,7 +296,7 @@ void restoreUndo(const QList<Undo> &undo) {
     if (iterator->kind == Undo::Kind::Gtk)
       setIniValue(iterator->target, iterator->key, iterator->value);
     else if (iterator->value)
-      setGSetting(iterator->target, *iterator->value);
+      setGSetting(iterator->target, *iterator->value); // NOLINT(bugprone-unchecked-optional-access)
   }
 }
 

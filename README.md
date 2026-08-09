@@ -1,9 +1,16 @@
 # HoloNight Appearance Adapters
 
-Experimental, non-installed consumers and projections for HoloNight's semantic
-appearance contract. CTV-005 validates the wire format and GTK Tier 1 mechanisms;
-CTV-006 evaluates separate GTK 3 and GTK 4 Tier 2 palette fragments. Production
-mutation and installation remain gated on CTV-007.
+Consumers and projections for HoloNight's semantic appearance contract. The installed
+`holonight-appearance-adapter` applies accepted GTK Tier 1 outputs through GSettings and
+owned GTK settings keys. The CTV-005 and CTV-006 palette/probe artifacts remain
+non-installed discovery evidence.
+
+```sh
+holonight-appearance-adapter apply --appearance ~/.config/holonight/appearance.toml --json
+holonight-appearance-adapter status --json
+holonight-appearance-adapter revert --json
+holonight-appearance-adapter query --appearance ~/.config/holonight/appearance.toml --field cursor-theme
+```
 
 ```sh
 cmake -S . -B build -DBUILD_TESTING=ON
@@ -16,3 +23,6 @@ contract, evidence, applicability matrix, and handoffs.
 
 See [the CTV-006 SDD](docs/sdd/ctv-006-gtk-palette/SPEC.md) for the independent
 GTK-major mappings, compatibility evidence, limitations, and recommendations.
+
+See [the CTV-101 SDD](docs/sdd/ctv-101-production-adapter/SPEC.md) for the production
+CLI protocol, output ownership, recovery, and fallback contract.

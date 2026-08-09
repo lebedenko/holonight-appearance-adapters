@@ -7,8 +7,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(CTest)
+include(GNUInstallDirs)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(JSON_GLIB REQUIRED IMPORTED_TARGET json-glib-1.0)
+pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
 
 add_library(holonight_appearance_consumer STATIC
   src/consumer.cpp
@@ -34,11 +36,17 @@ set(HOLONIGHT_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../holonight-config/build/
     "Build or install prefix containing HoloNightConfigConfig.cmake")
 list(PREPEND CMAKE_PREFIX_PATH "${HOLONIGHT_QT_DIR}" "${HOLONIGHT_CONFIG_DIR}")
 find_package(HolonightQt CONFIG REQUIRED)
+find_package(HoloNightConfig CONFIG REQUIRED)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui)
 
 add_library(holonight_appearance_qt_bridge STATIC src/qt_bridge.cpp)
 target_include_directories(holonight_appearance_qt_bridge PUBLIC include)
 target_link_libraries(holonight_appearance_qt_bridge PUBLIC HolonightQt::Theme Qt6::Core Qt6::Gui)
+
+add_executable(holonight-appearance-adapter src/adapter_main.cpp)
+target_link_libraries(holonight-appearance-adapter PRIVATE holonight_appearance_consumer
+  holonight_appearance_qt_bridge HolonightQt::Appearance HoloNight::Config PkgConfig::GIO Qt6::Core)
+install(TARGETS holonight-appearance-adapter RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 option(BUILD_GTK_PROBES "Build isolated GTK Tier 1 probe binaries" ON)
 if(BUILD_GTK_PROBES)
@@ -68,6 +76,8 @@ if(BUILD_TESTING)
 
   add_test(NAME no_mutations COMMAND ${CMAKE_COMMAND} -P
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/no_mutations.cmake)
+  add_test(NAME adapter_cli_tests COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/adapter_cli_tests.sh
+           $<TARGET_FILE:holonight-appearance-adapter>)
   if(BUILD_GTK_PROBES)
     find_program(XVFB_RUN xvfb-run)
     find_program(DBUS_RUN_SESSION dbus-run-session)
@@ -102,9 +112,10 @@ if(CLANG_TIDY)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/consumer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tier1_projection.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_bridge.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/adapter_main.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk_palette_common.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk3_palette.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk4_palette.cpp)
 endif()
 
-# Discovery targets intentionally have no install() rules pending CTV-007 acceptance.
+# Palette and probe targets remain non-installed discovery evidence.

@@ -43,6 +43,7 @@ jobs:
           cmake --build build
       - name: Verify
         run: |
+          ./build/palette_tests
           ctest --test-dir build --output-on-failure
           cmake --build build --target format-check
           cmake --build build --target tidy

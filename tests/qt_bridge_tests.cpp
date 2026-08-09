@@ -1,4 +1,6 @@
 #include "holonight/appearance_contract.h"
+#include "holonight/gtk3_palette.h"
+#include "holonight/gtk4_palette.h"
 #include "holonight/qt_bridge.h"
 
 #include "holonight/appearance.h"
@@ -58,6 +60,8 @@ TEST(QtBridge, RoundTripsEveryBuiltInSchemeAndAccent) {
       ASSERT_TRUE(parsed) << variant.id.toStdString() << '/' << accent.toStdString();
       EXPECT_EQ(parsed.value->scheme_id, variant.id.toStdString());
       EXPECT_EQ(parsed.value->accent_id, accent.toStdString());
+      EXPECT_FALSE(Holonight::Adapters::generateGtk3PaletteCss(*parsed.value).empty());
+      EXPECT_FALSE(Holonight::Adapters::generateGtk4PaletteCss(*parsed.value).empty());
     }
   }
 }

@@ -17,6 +17,17 @@ add_library(holonight_appearance_consumer STATIC
 target_include_directories(holonight_appearance_consumer PUBLIC include)
 target_link_libraries(holonight_appearance_consumer PUBLIC PkgConfig::JSON_GLIB)
 
+add_library(holonight_gtk_palette_common STATIC src/gtk_palette_common.cpp)
+target_include_directories(holonight_gtk_palette_common PUBLIC include PRIVATE src)
+
+add_library(holonight_gtk3_palette STATIC src/gtk3_palette.cpp)
+target_include_directories(holonight_gtk3_palette PUBLIC include PRIVATE src)
+target_link_libraries(holonight_gtk3_palette PRIVATE holonight_gtk_palette_common)
+
+add_library(holonight_gtk4_palette STATIC src/gtk4_palette.cpp)
+target_include_directories(holonight_gtk4_palette PUBLIC include PRIVATE src)
+target_link_libraries(holonight_gtk4_palette PRIVATE holonight_gtk_palette_common)
+
 set(HOLONIGHT_QT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../holonight-qt/build/tests/package-install-test/destdir/usr" CACHE PATH
     "Build or install prefix containing HolonightQtConfig.cmake")
 set(HOLONIGHT_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../holonight-config/build/tests/consumer-prefix" CACHE PATH
@@ -34,9 +45,9 @@ if(BUILD_GTK_PROBES)
   pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
   pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
   add_executable(holonight_gtk3_probe probes/gtk3_probe.cpp)
-  target_link_libraries(holonight_gtk3_probe PRIVATE PkgConfig::GTK3)
+  target_link_libraries(holonight_gtk3_probe PRIVATE holonight_gtk3_palette PkgConfig::GTK3)
   add_executable(holonight_gtk4_probe probes/gtk4_probe.cpp)
-  target_link_libraries(holonight_gtk4_probe PRIVATE PkgConfig::GTK4)
+  target_link_libraries(holonight_gtk4_probe PRIVATE holonight_gtk4_palette PkgConfig::GTK4)
 endif()
 
 if(BUILD_TESTING)
@@ -47,8 +58,13 @@ if(BUILD_TESTING)
 
   add_executable(qt_bridge_tests tests/qt_bridge_tests.cpp)
   target_link_libraries(qt_bridge_tests PRIVATE holonight_appearance_qt_bridge
-                                                holonight_appearance_consumer GTest::gtest_main)
+                                                holonight_appearance_consumer holonight_gtk3_palette
+                                                holonight_gtk4_palette GTest::gtest_main)
   add_test(NAME qt_bridge_tests COMMAND qt_bridge_tests)
+
+  add_executable(palette_tests tests/palette_tests.cpp)
+  target_link_libraries(palette_tests PRIVATE holonight_gtk3_palette holonight_gtk4_palette GTest::gtest_main)
+  add_test(NAME palette_tests COMMAND palette_tests)
 
   add_test(NAME no_mutations COMMAND ${CMAKE_COMMAND} -P
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/no_mutations.cmake)
@@ -61,6 +77,8 @@ if(BUILD_TESTING)
       add_test(NAME gtk4_isolated COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_gtk_probe.sh
                ${DBUS_RUN_SESSION} ${XVFB_RUN} $<TARGET_FILE:holonight_gtk4_probe>)
     endif()
+    add_test(NAME gtk_major_linkage COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_gtk_linkage.sh
+             $<TARGET_FILE:holonight_gtk3_probe> $<TARGET_FILE:holonight_gtk4_probe>)
   endif()
 endif()
 
@@ -83,7 +101,10 @@ if(CLANG_TIDY)
     COMMAND ${CLANG_TIDY} -p ${TIDY_DB_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/consumer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tier1_projection.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_bridge.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_bridge.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk_palette_common.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk3_palette.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk4_palette.cpp)
 endif()
 
-# CTV-005 targets intentionally have no install() rules pending CTV-007 acceptance.
+# Discovery targets intentionally have no install() rules pending CTV-007 acceptance.

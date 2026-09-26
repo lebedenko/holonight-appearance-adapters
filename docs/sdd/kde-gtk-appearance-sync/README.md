@@ -6,4 +6,11 @@ The state record retains original and last applied values for targeted rollback 
 
 GTK synchronization covers dark preference, icon and cursor themes, and UI font. GSettings updates cover available interface keys. The adapter does not install a GTK widget theme or override application owned palettes.
 
-Verification: run `ctest --test-dir build -R adapter_cli_tests --output-on-failure` with isolated XDG directories, the full adapter CTest suite, a KF6 disabled build, format check, and REUSE lint.
+## Implementation tasks and files
+
+- [x] `src/adapter_main.cpp`: add targeted KDE reads and writes, state records, rollback, revert, and canonical status comparison.
+- [x] `CMakeLists.txt`: make KF6 ConfigCore and ConfigGui optional; ConfigGui registers the typed font codec.
+- [x] `tests/adapter_cli_tests.sh`: exercise dark and light projections, repeated apply, drift, rollback, and conflict safe revert in isolated XDG directories.
+- [x] `README.md`: document KDE support and the optional status path.
+
+Verification on 2026-09-26: full adapter CTest suite 6/6; a KF6 disabled build reports KDE unavailable; format check, tidy, and REUSE lint pass. The isolated fixture reads `HoloNight-Dark` from KDE, GTK 3/4, and GSettings.

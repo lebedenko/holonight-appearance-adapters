@@ -2,12 +2,13 @@
 
 Consumers and projections for HoloNight's semantic appearance contract. The installed
 `holonight-appearance-adapter` applies accepted GTK Tier 1 outputs through GSettings and
-owned GTK settings keys. The CTV-005 and CTV-006 palette/probe artifacts remain
-non-installed discovery evidence.
+owned GTK settings keys, plus KDE `kdeglobals` entries when KF6 Config is available.
+The CTV-005 and CTV-006 palette/probe artifacts remain non-installed discovery evidence.
 
 ```sh
 holonight-appearance-adapter apply --appearance ~/.config/holonight/appearance.toml --json
 holonight-appearance-adapter status --json
+holonight-appearance-adapter status --appearance ~/.config/holonight/appearance.toml --json
 holonight-appearance-adapter revert --json
 holonight-appearance-adapter query --appearance ~/.config/holonight/appearance.toml --field cursor-theme
 ```

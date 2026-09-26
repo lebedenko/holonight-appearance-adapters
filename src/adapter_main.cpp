@@ -13,10 +13,17 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFont>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+
+#ifdef HOLONIGHT_HAVE_KCONFIG
+#include <KConfig>
+#include <KConfigGroup>
+#include <KConfigGui>
+#endif
 
 #include <cstdint>
 #include <optional>
@@ -36,7 +43,7 @@ struct Output {
 };
 
 struct Undo {
-  enum class Kind : std::uint8_t { Gtk, GSettings } kind;
+  enum class Kind : std::uint8_t { Gtk, GSettings, Kde } kind;
   QString target;
   QString key;
   std::optional<QString> value;
@@ -201,6 +208,73 @@ bool setIniValue(const QString &path, const QString &key, const std::optional<QS
   return output.commit();
 }
 
+bool kdeFontKey(const QString &key) { return key == QStringLiteral("font") || key == QStringLiteral("fixed"); }
+
+QString kdeGroup(const QString &key) {
+  const qsizetype slash = key.indexOf(u'/');
+  return key.left(slash);
+}
+
+QString kdeMember(const QString &key) { return key.mid(key.indexOf(u'/') + 1); }
+
+QFont projectedFont(const Snapshot &snapshot, bool fixed) {
+  QFont font(QString::fromStdString(fixed ? snapshot.monospace_font_family : snapshot.ui_font_family));
+  font.setPointSize(fixed ? snapshot.monospace_font_point_size : snapshot.ui_font_point_size);
+  return font;
+}
+
+std::optional<QString> kdeValue(const QString &path, const QString &key) { // NOLINT
+#ifdef HOLONIGHT_HAVE_KCONFIG
+  KConfig config(path, KConfig::SimpleConfig);
+  KConfigGroup group(&config, kdeGroup(key));
+  const QString member = kdeMember(key);
+  if (!group.hasKey(member))
+    return std::nullopt;
+  if (kdeFontKey(member))
+    return group.readEntry(member, QFont()).toString();
+  return group.readEntry(member, QString());
+#else
+  Q_UNUSED(path)
+  Q_UNUSED(key)
+  return std::nullopt;
+#endif
+}
+
+bool setKdeValue(const QString &path, const QString &key, const std::optional<QString> &value) { // NOLINT
+#ifdef HOLONIGHT_HAVE_KCONFIG
+  if (!QDir().mkpath(QFileInfo(path).absolutePath()))
+    return false;
+  KConfig config(path, KConfig::SimpleConfig);
+  KConfigGroup group(&config, kdeGroup(key));
+  const QString member = kdeMember(key);
+  if (group.isEntryImmutable(member))
+    return false;
+  if (!value)
+    group.deleteEntry(member, KConfigBase::Notify);
+  else if (kdeFontKey(member)) {
+    QFont font;
+    if (!font.fromString(*value))
+      return false;
+    group.writeEntry(member, font, KConfigBase::Notify);
+  } else
+    group.writeEntry(member, *value, KConfigBase::Notify);
+  return config.sync();
+#else
+  Q_UNUSED(path)
+  Q_UNUSED(key)
+  Q_UNUSED(value)
+  return false;
+#endif
+}
+
+std::map<QString, QString> kdeProjection(const Snapshot &snapshot) {
+  return {{QStringLiteral("General/ColorScheme"), QString::fromStdString(snapshot.scheme_id)},
+          {QStringLiteral("General/font"), projectedFont(snapshot, false).toString()},
+          {QStringLiteral("General/fixed"), projectedFont(snapshot, true).toString()},
+          {QStringLiteral("Icons/Theme"), QString::fromStdString(snapshot.icon_theme)},
+          {QStringLiteral("Mouse/cursorTheme"), QString::fromStdString(snapshot.cursor_theme)}};
+}
+
 std::optional<QString> schemaKey(const QString &key, GSettingsSchema **schema_out) {
   const qsizetype slash = key.indexOf(u'/');
   if (slash < 1)
@@ -295,6 +369,8 @@ void restoreUndo(const QList<Undo> &undo) {
   for (auto iterator = undo.crbegin(); iterator != undo.crend(); ++iterator) {
     if (iterator->kind == Undo::Kind::Gtk)
       setIniValue(iterator->target, iterator->key, iterator->value);
+    else if (iterator->kind == Undo::Kind::Kde)
+      setKdeValue(iterator->target, iterator->key, iterator->value);
     else if (iterator->value)
       setGSetting(iterator->target, *iterator->value); // NOLINT(bugprone-unchecked-optional-access)
   }
@@ -370,6 +446,32 @@ int apply(const QString &appearance) {
            {}});
     }
   }
+
+#ifdef HOLONIGHT_HAVE_KCONFIG
+  const QString kde_path = configHome() + QStringLiteral("/kdeglobals");
+  for (const auto &[key, desired] : kdeProjection(*snapshot)) {
+    const QString id = QStringLiteral("kde/") + key;
+    const auto current = kdeValue(kde_path, key);
+    if (current != std::optional<QString>(desired) && !setKdeValue(kde_path, key, desired)) {
+      restoreUndo(undo);
+      outputs.append({id, QStringLiteral("error"), QStringLiteral("relaunch"),
+                      QStringLiteral("KDE configuration could not be updated")});
+      return respond(QStringLiteral("apply"), outputs, true);
+    }
+    if (current != std::optional<QString>(desired))
+      undo.append({Undo::Kind::Kde, kde_path, key, current});
+    const QJsonObject old = entries.value(id).toObject();
+    entries[id] = stateEntry(originalValue(old, current), desired, QStringLiteral("kde"), kde_path, key);
+    outputs.append(
+        {id,
+         current == std::optional<QString>(desired) ? QStringLiteral("unchanged") : QStringLiteral("applied"),
+         QStringLiteral("relaunch"),
+         {}});
+  }
+#else
+  outputs.append({QStringLiteral("kde"), QStringLiteral("unavailable"), QStringLiteral("relaunch"),
+                  QStringLiteral("KDE ConfigCore dependency was unavailable at build time")});
+#endif
   state[QStringLiteral("protocol_version")] = kProtocolVersion;
   state[QStringLiteral("entries")] = entries;
   if (!writeJsonObject(statePath(), state)) {
@@ -389,7 +491,28 @@ int apply(const QString &appearance) {
   return respond(QStringLiteral("apply"), outputs);
 }
 
-int status() {
+int status(const std::optional<QString> &appearance) {
+  std::optional<Snapshot> snapshot;
+  if (appearance) {
+    QString diagnostic;
+    snapshot = loadSnapshot(*appearance, &diagnostic);
+    if (!snapshot)
+      return respond(QStringLiteral("status"),
+                     {{QStringLiteral("canonical"), QStringLiteral("error"), QStringLiteral("live"), diagnostic}},
+                     true);
+  }
+  std::map<QString, QString> expected;
+  if (snapshot) {
+    const Tier1Projection projection = Holonight::Adapters::projectTier1(*snapshot);
+    for (const auto &[key, value] : projection.gsettings)
+      expected[QString::fromStdString(key)] = QString::fromStdString(value);
+    for (const auto &[key, value] : projection.gtk3_settings)
+      expected[QStringLiteral("gtk3/") + QString::fromStdString(key)] = QString::fromStdString(value);
+    for (const auto &[key, value] : projection.gtk4_settings)
+      expected[QStringLiteral("gtk4/") + QString::fromStdString(key)] = QString::fromStdString(value);
+    for (const auto &[key, value] : kdeProjection(*snapshot))
+      expected[QStringLiteral("kde/") + key] = value;
+  }
   const auto state = readJsonObject(statePath());
   if (!state)
     return respond(QStringLiteral("status"),
@@ -405,18 +528,31 @@ int status() {
     if (kind == QStringLiteral("gtk"))
       current =
           iniValue(entry.value(QStringLiteral("target")).toString(), entry.value(QStringLiteral("key")).toString());
+    else if (kind == QStringLiteral("kde"))
+      current =
+          kdeValue(entry.value(QStringLiteral("target")).toString(), entry.value(QStringLiteral("key")).toString());
     else
       current = getGSetting(entry.value(QStringLiteral("target")).toString());
-    const QString mode = kind == QStringLiteral("gtk") ? QStringLiteral("relaunch") : QStringLiteral("live");
+    const QString mode = kind == QStringLiteral("gtk") || kind == QStringLiteral("kde") ? QStringLiteral("relaunch")
+                                                                                        : QStringLiteral("live");
+    const bool stale = snapshot && expected.contains(iterator.key()) &&
+                       expected.at(iterator.key()) != entry.value(QStringLiteral("last")).toString();
     outputs.append({iterator.key(),
-                    current == std::optional<QString>(entry.value(QStringLiteral("last")).toString())
+                    !stale && current == std::optional<QString>(entry.value(QStringLiteral("last")).toString())
                         ? QStringLiteral("applied")
                         : QStringLiteral("conflict"),
-                    mode, current ? QString{} : QStringLiteral("output is absent or unavailable")});
+                    mode,
+                    stale     ? QStringLiteral("canonical appearance changed since last apply")
+                    : current ? QString{}
+                              : QStringLiteral("output is absent or unavailable")});
   }
   if (outputs.isEmpty())
     outputs.append({QStringLiteral("state"), QStringLiteral("unavailable"), QStringLiteral("live"),
                     QStringLiteral("appearance has not been applied")});
+#ifndef HOLONIGHT_HAVE_KCONFIG
+  outputs.append({QStringLiteral("kde"), QStringLiteral("unavailable"), QStringLiteral("relaunch"),
+                  QStringLiteral("KDE ConfigCore dependency was unavailable at build time")});
+#endif
   return respond(QStringLiteral("status"), outputs);
 }
 
@@ -436,8 +572,11 @@ int revert() {
     const QString target = entry.value(QStringLiteral("target")).toString();
     const QString key = entry.value(QStringLiteral("key")).toString();
     const QString last = entry.value(QStringLiteral("last")).toString();
-    std::optional<QString> current = kind == QStringLiteral("gtk") ? iniValue(target, key) : getGSetting(target);
-    const QString mode = kind == QStringLiteral("gtk") ? QStringLiteral("relaunch") : QStringLiteral("live");
+    std::optional<QString> current = kind == QStringLiteral("gtk")   ? iniValue(target, key)
+                                     : kind == QStringLiteral("kde") ? kdeValue(target, key)
+                                                                     : getGSetting(target);
+    const QString mode = kind == QStringLiteral("gtk") || kind == QStringLiteral("kde") ? QStringLiteral("relaunch")
+                                                                                        : QStringLiteral("live");
     if (current != std::optional<QString>(last)) {
       remaining[iterator.key()] = entry;
       outputs.append({iterator.key(), QStringLiteral("conflict"), mode,
@@ -447,8 +586,9 @@ int revert() {
     const QJsonValue original_json = entry.value(QStringLiteral("original"));
     const std::optional<QString> original =
         original_json.isNull() ? std::nullopt : std::optional<QString>(original_json.toString());
-    const bool ok =
-        kind == QStringLiteral("gtk") ? setIniValue(target, key, original) : original && setGSetting(target, *original);
+    const bool ok = kind == QStringLiteral("gtk")   ? setIniValue(target, key, original)
+                    : kind == QStringLiteral("kde") ? setKdeValue(target, key, original)
+                                                    : original && setGSetting(target, *original);
     if (!ok) {
       remaining[iterator.key()] = entry;
       outputs.append(
@@ -469,6 +609,10 @@ int revert() {
 
 int main(int argc, char *argv[]) { // NOLINT(bugprone-exception-escape)
   QCoreApplication application(argc, argv);
+#ifdef HOLONIGHT_HAVE_KCONFIG
+  // ConfigGui registers the QFont codecs used by KConfigGroup at library load time.
+  Q_UNUSED(KConfigGui::hasSessionConfig())
+#endif
   const QStringList arguments = application.arguments();
   if (arguments.size() < 2)
     return respond(QStringLiteral("unknown"),
@@ -476,8 +620,15 @@ int main(int argc, char *argv[]) { // NOLINT(bugprone-exception-escape)
                      QStringLiteral("an operation is required")}},
                    true);
   const QString &operation = arguments[1];
-  if (operation == QStringLiteral("status"))
-    return status();
+  if (operation == QStringLiteral("status")) {
+    const qsizetype index = arguments.indexOf(QStringLiteral("--appearance"));
+    if (index >= 0 && index + 1 >= arguments.size())
+      return respond(operation,
+                     {{QStringLiteral("cli"), QStringLiteral("error"), QStringLiteral("live"),
+                       QStringLiteral("--appearance requires a path")}},
+                     true);
+    return status(index < 0 ? std::nullopt : std::optional<QString>(arguments[index + 1]));
+  }
   if (operation == QStringLiteral("revert"))
     return revert();
   const qsizetype appearance_index = arguments.indexOf(QStringLiteral("--appearance"));

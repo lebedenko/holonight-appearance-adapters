@@ -40,6 +40,7 @@ list(PREPEND CMAKE_PREFIX_PATH "${HOLONIGHT_QT_DIR}" "${HOLONIGHT_CONFIG_DIR}")
 find_package(HolonightQt CONFIG REQUIRED)
 find_package(HoloNightConfig CONFIG REQUIRED)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui)
+find_package(KF6Config QUIET)
 
 add_library(holonight_appearance_qt_bridge STATIC src/qt_bridge.cpp)
 target_include_directories(holonight_appearance_qt_bridge PUBLIC include)
@@ -48,6 +49,10 @@ target_link_libraries(holonight_appearance_qt_bridge PUBLIC HolonightQt::Theme Q
 add_executable(holonight-appearance-adapter src/adapter_main.cpp)
 target_link_libraries(holonight-appearance-adapter PRIVATE holonight_appearance_consumer
   holonight_appearance_qt_bridge HolonightQt::Appearance HoloNight::Config PkgConfig::GIO Qt6::Core)
+if(KF6Config_FOUND AND TARGET KF6::ConfigGui)
+  target_link_libraries(holonight-appearance-adapter PRIVATE KF6::ConfigCore KF6::ConfigGui Qt6::Gui)
+  target_compile_definitions(holonight-appearance-adapter PRIVATE HOLONIGHT_HAVE_KCONFIG=1)
+endif()
 install(TARGETS holonight-appearance-adapter RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 option(BUILD_GTK_PROBES "Build isolated GTK Tier 1 probe binaries" ON)

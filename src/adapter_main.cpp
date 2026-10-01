@@ -7,17 +7,25 @@
 #include "holonight/appearance.h"
 #include "semanticappearance.h"
 
+#include <holonight/config/appearance.h>
 #include <holonight/config/store.h>
 
+#include "labwc_theme.h"
 #include <QCoreApplication>
 #include <QDir>
+#include <QDomDocument>
 #include <QFile>
 #include <QFileInfo>
 #include <QFont>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
+#include <QRegularExpression>
 #include <QSaveFile>
+#include <QTemporaryDir>
+#include <signal.h>
+#include <unistd.h>
 
 #ifdef HOLONIGHT_HAVE_KCONFIG
 #include <KConfig>
@@ -43,7 +51,7 @@ struct Output {
 };
 
 struct Undo {
-  enum class Kind : std::uint8_t { Gtk, GSettings, Kde } kind;
+  enum class Kind : std::uint8_t { Gtk, GSettings, Kde, File, LabwcFont } kind;
   QString target;
   QString key;
   std::optional<QString> value;
@@ -365,9 +373,15 @@ std::optional<QString> originalValue(const QJsonObject &old, const std::optional
   return current;
 }
 
+#include "labwc_adapter.inc"
+
 void restoreUndo(const QList<Undo> &undo) {
   for (auto iterator = undo.crbegin(); iterator != undo.crend(); ++iterator) {
-    if (iterator->kind == Undo::Kind::Gtk)
+    if (iterator->kind == Undo::Kind::File)
+      setFileValue(iterator->target, iterator->value);
+    else if (iterator->kind == Undo::Kind::LabwcFont)
+      setLabwcFontValue(iterator->target, iterator->key, iterator->value);
+    else if (iterator->kind == Undo::Kind::Gtk)
       setIniValue(iterator->target, iterator->key, iterator->value);
     else if (iterator->kind == Undo::Kind::Kde)
       setKdeValue(iterator->target, iterator->key, iterator->value);
@@ -472,14 +486,25 @@ int apply(const QString &appearance) {
   outputs.append({QStringLiteral("kde"), QStringLiteral("unavailable"), QStringLiteral("relaunch"),
                   QStringLiteral("KDE ConfigCore dependency was unavailable at build time")});
 #endif
+  if (!applyLabwc(appearance, entries, outputs, undo)) {
+    restoreUndo(undo);
+    finishLabwcRecovery();
+    outputs.append({"labwc/theme", "error", "live", "labwc update failed; transaction rolled back"});
+    return respond("apply", outputs, true);
+  }
   state[QStringLiteral("protocol_version")] = kProtocolVersion;
   state[QStringLiteral("entries")] = entries;
   if (!writeJsonObject(statePath(), state)) {
     restoreUndo(undo);
+    finishLabwcRecovery();
     outputs.append({QStringLiteral("state"), QStringLiteral("error"), QStringLiteral("live"),
                     QStringLiteral("adapter state could not be stored atomically")});
     return respond(QStringLiteral("apply"), outputs, true);
   }
+  finishLabwcRecovery();
+  if (std::any_of(undo.cbegin(), undo.cend(),
+                  [](const Undo &item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; }))
+    reloadLabwc(outputs);
   outputs.append({QStringLiteral("portal"), QStringLiteral("delegated"), QStringLiteral("delegated"),
                   QStringLiteral("published by the HoloNight Shell Settings portal")});
   outputs.append({QStringLiteral("xsettings"), QStringLiteral("unavailable"), QStringLiteral("delegated"),
@@ -520,12 +545,29 @@ int status(const std::optional<QString> &appearance) {
                      QStringLiteral("state is corrupt or unreadable")}},
                    true);
   QList<Output> outputs;
+  const bool selected = labwcSelected(outputs);
+  QMap<QString, QByteArray> labwcFiles;
+  const auto labwcValues = appearance ? labwcExpected(*appearance, &labwcFiles) : QMap<QString, QString>{};
+  for (auto it = labwcValues.begin(); it != labwcValues.end(); ++it)
+    expected[it.key()] = it.value();
+  if (labwcFiles.isEmpty()) {
+    const auto themeEntry = state->value("entries").toObject().value("labwc/file/themerc").toObject();
+    if (!themeEntry.isEmpty())
+      labwcFiles["themerc"] = themeEntry["last"].toString().toUtf8();
+  }
+  if (!labwcFiles.isEmpty())
+    labwcOverrides(labwcFiles, outputs);
+  if (selected && !state->value("entries").toObject().contains("labwc/file/themerc"))
+    outputs.append({"labwc/theme", "unavailable", "live",
+                    "synchronized theme has not been applied; installed fallback may be in use"});
   const QJsonObject entries = state->value(QStringLiteral("entries")).toObject();
   for (auto iterator = entries.begin(); iterator != entries.end(); ++iterator) {
     const QJsonObject entry = iterator.value().toObject();
     const QString kind = entry.value(QStringLiteral("kind")).toString();
     std::optional<QString> current;
-    if (kind == QStringLiteral("gtk"))
+    if (kind.startsWith("labwc-"))
+      current = labwcCurrent(entry);
+    else if (kind == QStringLiteral("gtk"))
       current =
           iniValue(entry.value(QStringLiteral("target")).toString(), entry.value(QStringLiteral("key")).toString());
     else if (kind == QStringLiteral("kde"))
@@ -535,16 +577,23 @@ int status(const std::optional<QString> &appearance) {
       current = getGSetting(entry.value(QStringLiteral("target")).toString());
     const QString mode = kind == QStringLiteral("gtk") || kind == QStringLiteral("kde") ? QStringLiteral("relaunch")
                                                                                         : QStringLiteral("live");
-    const bool stale = snapshot && expected.contains(iterator.key()) &&
-                       expected.at(iterator.key()) != entry.value(QStringLiteral("last")).toString();
+    const bool disabled = kind.startsWith("labwc-") && !selected;
+    const bool redirected =
+        (kind == "labwc-file" && entry["target"].toString() != labwcThemeDirectory() + '/' + iterator.key().mid(11)) ||
+        (kind == "labwc-font" && entry["target"].toString() != labwcDirectory() + "/rc.xml");
+    const bool stale = disabled || redirected ||
+                       (snapshot && expected.contains(iterator.key()) &&
+                        expected.at(iterator.key()) != entry.value(QStringLiteral("last")).toString());
     outputs.append({iterator.key(),
                     !stale && current == std::optional<QString>(entry.value(QStringLiteral("last")).toString())
                         ? QStringLiteral("applied")
                         : QStringLiteral("conflict"),
                     mode,
-                    stale     ? QStringLiteral("canonical appearance changed since last apply")
-                    : current ? QString{}
-                              : QStringLiteral("output is absent or unavailable")});
+                    disabled     ? QStringLiteral("HoloNight is no longer selected")
+                    : redirected ? QStringLiteral("configuration or data paths changed since last apply")
+                    : stale      ? QStringLiteral("canonical appearance changed since last apply")
+                    : current    ? QString{}
+                                 : QStringLiteral("output is absent or unavailable")});
   }
   if (outputs.isEmpty())
     outputs.append({QStringLiteral("state"), QStringLiteral("unavailable"), QStringLiteral("live"),
@@ -565,6 +614,7 @@ int revert() {
                    true);
   QJsonObject remaining;
   QList<Output> outputs;
+  QList<Undo> undo;
   const QJsonObject entries = state->value(QStringLiteral("entries")).toObject();
   for (auto iterator = entries.begin(); iterator != entries.end(); ++iterator) {
     const QJsonObject entry = iterator.value().toObject();
@@ -572,7 +622,8 @@ int revert() {
     const QString target = entry.value(QStringLiteral("target")).toString();
     const QString key = entry.value(QStringLiteral("key")).toString();
     const QString last = entry.value(QStringLiteral("last")).toString();
-    std::optional<QString> current = kind == QStringLiteral("gtk")   ? iniValue(target, key)
+    std::optional<QString> current = kind.startsWith("labwc-")       ? labwcCurrent(entry)
+                                     : kind == QStringLiteral("gtk") ? iniValue(target, key)
                                      : kind == QStringLiteral("kde") ? kdeValue(target, key)
                                                                      : getGSetting(target);
     const QString mode = kind == QStringLiteral("gtk") || kind == QStringLiteral("kde") ? QStringLiteral("relaunch")
@@ -586,7 +637,8 @@ int revert() {
     const QJsonValue original_json = entry.value(QStringLiteral("original"));
     const std::optional<QString> original =
         original_json.isNull() ? std::nullopt : std::optional<QString>(original_json.toString());
-    const bool ok = kind == QStringLiteral("gtk")   ? setIniValue(target, key, original)
+    const bool ok = kind.startsWith("labwc-")       ? labwcSet(entry, original)
+                    : kind == QStringLiteral("gtk") ? setIniValue(target, key, original)
                     : kind == QStringLiteral("kde") ? setKdeValue(target, key, original)
                                                     : original && setGSetting(target, *original);
     if (!ok) {
@@ -595,11 +647,22 @@ int revert() {
           {iterator.key(), QStringLiteral("error"), mode, QStringLiteral("owned output could not be restored")});
       continue;
     }
+    undo.append({kind == "labwc-file"   ? Undo::Kind::File
+                 : kind == "labwc-font" ? Undo::Kind::LabwcFont
+                 : kind == "gtk"        ? Undo::Kind::Gtk
+                 : kind == "kde"        ? Undo::Kind::Kde
+                                        : Undo::Kind::GSettings,
+                 target, key, current});
     outputs.append({iterator.key(), QStringLiteral("restored"), mode, {}});
   }
   QJsonObject updated{{QStringLiteral("protocol_version"), kProtocolVersion}, {QStringLiteral("entries"), remaining}};
-  if (!writeJsonObject(statePath(), updated))
+  if (!writeJsonObject(statePath(), updated)) {
+    restoreUndo(undo);
     return respond(QStringLiteral("revert"), outputs, true);
+  }
+  if (std::any_of(undo.cbegin(), undo.cend(),
+                  [](const Undo &item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; }))
+    reloadLabwc(outputs);
   const bool error = std::any_of(outputs.cbegin(), outputs.cend(),
                                  [](const Output &output) { return output.status == QStringLiteral("error"); });
   return respond(QStringLiteral("revert"), outputs, error);
@@ -620,6 +683,21 @@ int main(int argc, char *argv[]) { // NOLINT(bugprone-exception-escape)
                      QStringLiteral("an operation is required")}},
                    true);
   const QString &operation = arguments[1];
+  const auto labwc_index = arguments.indexOf("--labwc-config");
+  if (labwc_index >= 0) {
+    if (labwc_index + 1 >= arguments.size())
+      return respond(operation, {{"cli", "error", "live", "--labwc-config requires a directory"}}, true);
+    labwcConfig = QDir(arguments[labwc_index + 1]).absolutePath();
+  }
+  QDir().mkpath(QFileInfo(statePath()).absolutePath());
+  QLockFile lock(statePath() + ".lock");
+  if (operation != "query" && !lock.tryLock(10000))
+    return respond(operation, {{"state", "error", "live", "adapter state lock is unavailable"}}, true);
+  if (operation != "query" && !recoverLabwc())
+    return respond(operation,
+                   {{"labwc/recovery", "error", "live",
+                     "interrupted labwc update could not be recovered; external changes were preserved"}},
+                   true);
   if (operation == QStringLiteral("status")) {
     const qsizetype index = arguments.indexOf(QStringLiteral("--appearance"));
     if (index >= 0 && index + 1 >= arguments.size())

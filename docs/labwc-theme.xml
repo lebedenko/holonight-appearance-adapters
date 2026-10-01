@@ -1,0 +1,12 @@
+<!-- Merge into the existing theme section of rc.xml. This is an example, not a complete rc.xml. -->
+<theme>
+  <name>HoloNight</name>
+  <titlebar>
+    <layout>:iconify,max,close</layout>
+    <showTitle>yes</showTitle>
+  </titlebar>
+  <cornerRadius>8</cornerRadius>
+  <maximizedDecoration>titlebar</maximizedDecoration>
+  <dropShadows>yes</dropShadows>
+  <dropShadowsOnTiled>no</dropShadowsOnTiled>
+</theme>

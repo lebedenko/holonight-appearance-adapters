@@ -39,16 +39,27 @@ set(HOLONIGHT_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../holonight-config/build/
 list(PREPEND CMAKE_PREFIX_PATH "${HOLONIGHT_QT_DIR}" "${HOLONIGHT_CONFIG_DIR}")
 find_package(HolonightQt CONFIG REQUIRED)
 find_package(HoloNightConfig CONFIG REQUIRED)
-find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui)
+find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Xml)
 find_package(KF6Config QUIET)
 
 add_library(holonight_appearance_qt_bridge STATIC src/qt_bridge.cpp)
 target_include_directories(holonight_appearance_qt_bridge PUBLIC include)
 target_link_libraries(holonight_appearance_qt_bridge PUBLIC HolonightQt::Theme Qt6::Core Qt6::Gui)
 
+add_library(holonight_labwc_theme STATIC src/labwc_theme.cpp)
+target_link_libraries(holonight_labwc_theme PUBLIC HolonightQt::Theme)
+target_include_directories(holonight_labwc_theme PUBLIC src)
+add_executable(holonight-labwc-fallback src/labwc_fallback.cpp)
+target_link_libraries(holonight-labwc-fallback PRIVATE holonight_labwc_theme HolonightQt::Appearance HoloNight::Config)
+add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/labwc-fallback/themerc"
+  COMMAND holonight-labwc-fallback "${CMAKE_CURRENT_BINARY_DIR}/labwc-fallback"
+  DEPENDS holonight-labwc-fallback)
+add_custom_target(labwc-fallback ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/labwc-fallback/themerc")
+install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/labwc-fallback/" DESTINATION "${CMAKE_INSTALL_DATADIR}/themes/HoloNight/labwc")
+install(FILES docs/labwc-theme.xml docs/labwc-theme.md DESTINATION "${CMAKE_INSTALL_DATADIR}/doc/${PROJECT_NAME}")
 add_executable(holonight-appearance-adapter src/adapter_main.cpp)
 target_link_libraries(holonight-appearance-adapter PRIVATE holonight_appearance_consumer
-  holonight_appearance_qt_bridge HolonightQt::Appearance HoloNight::Config PkgConfig::GIO Qt6::Core)
+  holonight_appearance_qt_bridge HolonightQt::Appearance HoloNight::Config PkgConfig::GIO Qt6::Core Qt6::Xml holonight_labwc_theme)
 if(KF6Config_FOUND AND TARGET KF6::ConfigGui)
   target_link_libraries(holonight-appearance-adapter PRIVATE KF6::ConfigCore KF6::ConfigGui Qt6::Gui)
   target_compile_definitions(holonight-appearance-adapter PRIVATE HOLONIGHT_HAVE_KCONFIG=1)
@@ -66,6 +77,9 @@ if(BUILD_GTK_PROBES)
 endif()
 
 if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME labwc_install_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/labwc_install_tests.py ${CMAKE_CURRENT_BINARY_DIR})
+  add_test(NAME labwc_cli_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/labwc_cli_tests.py $<TARGET_FILE:holonight-appearance-adapter>)
   find_package(GTest REQUIRED)
   add_executable(consumer_tests tests/consumer_tests.cpp)
   target_link_libraries(consumer_tests PRIVATE holonight_appearance_consumer GTest::gtest_main)
@@ -101,7 +115,7 @@ endif()
 
 find_program(CLANG_FORMAT clang-format)
 find_program(CLANG_TIDY clang-tidy)
-file(GLOB_RECURSE FORMAT_FILES CONFIGURE_DEPENDS include/*.h src/*.cpp tests/*.cpp probes/*.cpp)
+file(GLOB_RECURSE FORMAT_FILES CONFIGURE_DEPENDS include/*.h src/*.cpp src/*.inc src/*.h tests/*.cpp probes/*.cpp)
 if(CLANG_FORMAT)
   add_custom_target(format COMMAND ${CLANG_FORMAT} -i ${FORMAT_FILES})
   add_custom_target(format-check COMMAND ${CLANG_FORMAT} --dry-run --Werror ${FORMAT_FILES})
@@ -120,6 +134,8 @@ if(CLANG_TIDY)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tier1_projection.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_bridge.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/adapter_main.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/labwc_theme.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/labwc_fallback.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk_palette_common.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk3_palette.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk4_palette.cpp)

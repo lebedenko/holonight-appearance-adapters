@@ -15,8 +15,8 @@ holonight-appearance-adapter query --appearance ~/.config/holonight/appearance.t
 
 ```sh
 cmake -S . -B build -DBUILD_TESTING=ON
-cmake --build build
-ctest --test-dir build --output-on-failure
+cmake --build build/debug
+ctest --test-dir build/test --output-on-failure
 ```
 
 See [the CTV-005 SDD](docs/sdd/ctv-005-semantic-consumer/SPEC.md) for the
@@ -32,3 +32,8 @@ The opt-in [labwc Accent theme](docs/labwc-theme.md) synchronizes colors and tit
 fonts when `HoloNight` is selected in `rc.xml`. Installation includes a generated
 default dark fallback; see the guide for XML enablement, override conflicts,
 custom configuration directories, recovery, and visual smoke tests.
+
+## Standalone developer tooling
+
+See [tooling/README.md](tooling/README.md) for presets, local dependency overrides, editor refresh,
+`task tooling:doctor`, and the independent Serena project.

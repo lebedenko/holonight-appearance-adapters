@@ -18,7 +18,7 @@ if len(sys.argv) > 1 and sys.argv[1] == '--client':
     gi.require_version('Gtk', '3.0')
     from gi.repository import Gtk
     windows = []
-    for title in ['Inactive HoloNight window', 'Active HoloNight window']:
+    for title in ['Inactive HoloNight window with a long title that must truncate before the window controls', 'Active HoloNight window']:
         window = Gtk.Window(title=title)
         window.set_default_size(420, 220)
         window.add(Gtk.Label(label='Server-side decoration smoke test'))

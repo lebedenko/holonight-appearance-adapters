@@ -1,9 +1,8 @@
+#include "holonight/appearance.h"
 #include "holonight/appearance_contract.h"
 #include "holonight/gtk3_palette.h"
 #include "holonight/gtk4_palette.h"
 #include "holonight/qt_bridge.h"
-
-#include "holonight/appearance.h"
 #include "holonight/theme_catalog.h"
 #include "semanticappearance.h"
 
@@ -28,7 +27,7 @@ Holonight::ResolvedAppearance defaults() {
           .cursor_theme = QStringLiteral("HoloNight")};
 }
 
-} // namespace
+}  // namespace
 
 TEST(QtBridge, SerializesDeterministicallyAndRoundTripsThroughJsonGlib) {
   const auto semantic = Holonight::resolveSemanticAppearance(defaults());
@@ -48,8 +47,8 @@ TEST(QtBridge, SerializesDeterministicallyAndRoundTripsThroughJsonGlib) {
 TEST(QtBridge, RoundTripsEveryBuiltInSchemeAndAccent) {
   const std::array accents{QStringLiteral("default"), QStringLiteral("cyan"), QStringLiteral("blue"),
                            QStringLiteral("violet"), QStringLiteral("yellow")};
-  for (const auto &variant : Holonight::themeVariants()) {
-    for (const auto &accent : accents) {
+  for (const auto& variant : Holonight::themeVariants()) {
+    for (const auto& accent : accents) {
       auto input = defaults();
       input.scheme = variant.id;
       input.theme_scheme = variant.scheme;

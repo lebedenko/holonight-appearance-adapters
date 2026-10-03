@@ -7,5 +7,5 @@ struct SemanticAppearance;
 }
 
 namespace Holonight::Adapters {
-[[nodiscard]] QByteArray serializeSemanticAppearance(const SemanticAppearance &appearance);
+[[nodiscard]] QByteArray serializeSemanticAppearance(const SemanticAppearance& value);
 }

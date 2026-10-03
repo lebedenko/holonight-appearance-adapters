@@ -6,6 +6,6 @@
 
 namespace Holonight::Adapters {
 
-[[nodiscard]] std::string generateGtk4PaletteCss(const Snapshot &snapshot);
+[[nodiscard]] std::string generateGtk4PaletteCss(const Snapshot& snapshot);
 
-} // namespace Holonight::Adapters
+}  // namespace Holonight::Adapters

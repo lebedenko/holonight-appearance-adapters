@@ -14,15 +14,15 @@ std::string cssColor(Color value) {
   return result.str();
 }
 
-} // namespace
+}  // namespace
 
-std::string definitions(const Snapshot &snapshot) {
+std::string definitions(const Snapshot& snapshot) {
   std::string css;
   for (std::size_t index = 0; index < kColorRoleNames.size(); ++index) {
-    css += "@define-color holonight_" + std::string(kColorRoleNames[index]) + " " + cssColor(snapshot.colors[index]) +
-           ";\n";
+    css += "@define-color holonight_" + std::string(kColorRoleNames.at(index)) + " " +
+           cssColor(snapshot.colors.at(index)) + ";\n";
   }
   return css;
 }
 
-} // namespace Holonight::Adapters::GtkPalette
+}  // namespace Holonight::Adapters::GtkPalette

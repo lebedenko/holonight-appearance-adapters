@@ -4,7 +4,7 @@
 
 namespace Holonight::Adapters {
 
-std::string generateGtk3PaletteCss(const Snapshot &snapshot) {
+std::string generateGtk3PaletteCss(const Snapshot& snapshot) {
   return GtkPalette::definitions(snapshot) + R"CSS(
 /* CTV-006 GTK 3 palette only: native metrics and application CSS remain authoritative. */
 window, dialog, .background { background-color: @holonight_window_surface; color: @holonight_primary_text; }
@@ -29,4 +29,4 @@ button:focus, entry:focus, spinbutton:focus, combobox:focus { border-color: @hol
 )CSS";
 }
 
-} // namespace Holonight::Adapters
+}  // namespace Holonight::Adapters

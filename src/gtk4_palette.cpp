@@ -4,7 +4,7 @@
 
 namespace Holonight::Adapters {
 
-std::string generateGtk4PaletteCss(const Snapshot &snapshot) {
+std::string generateGtk4PaletteCss(const Snapshot& snapshot) {
   return GtkPalette::definitions(snapshot) + R"CSS(
 /* CTV-006 GTK 4 palette only: no GTK 4.16 custom properties or native metric overrides. */
 window, dialog, .background { background-color: @holonight_window_surface; color: @holonight_primary_text; }
@@ -29,4 +29,4 @@ button:focus-visible, entry:focus-within, spinbutton:focus-within, dropdown:focu
 )CSS";
 }
 
-} // namespace Holonight::Adapters
+}  // namespace Holonight::Adapters

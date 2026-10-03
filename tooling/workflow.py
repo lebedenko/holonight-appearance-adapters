@@ -207,7 +207,8 @@ def tidy(config, scope):
             continue
         tidy_config = ROOT / 'tests/.clang-tidy' if is_test and (ROOT / 'tests/.clang-tidy').exists() else ROOT / '.clang-tidy'
         run([os.environ.get('CLANG_TIDY', 'clang-tidy'), path, '-p', target,
-             f'--config-file={tidy_config}'])
+             f'--config-file={tidy_config}',
+             f'--header-filter=^{re.escape(str(ROOT))}/(apps|libs|include|src|qml|wayland|tests)/.*\\.(h|hpp|inc)$'])
     uncovered = sources - {Path(e['file']) for e in entries}
     if uncovered:
         raise RuntimeError('No compile command for: ' + ', '.join(str(p.relative_to(ROOT)) for p in sorted(uncovered)))
@@ -299,7 +300,7 @@ def main():
     elif command == 'doctor':
         sys.exit(doctor(config))
     elif command in {'format', 'format-check'}:
-        for path in owned_files({'.cpp', '.cc', '.cxx', '.h', '.hpp', '.c'}):
+        for path in owned_files({'.cpp', '.cc', '.cxx', '.h', '.hpp', '.c', '.inc'}):
             run([os.environ.get('CLANG_FORMAT', 'clang-format'), *(['--dry-run', '--Werror'] if command.endswith('check') else ['-i']), path])
     elif command == 'tidy':
         tidy(config, args.scope)

@@ -1,25 +1,27 @@
 #include "holonight/appearance_contract.h"
 
-#include <json-glib/json-glib.h>
-
+#include <algorithm>
 #include <charconv>
+#include <iterator>
+#include <json-glib/json-glib.h>
 #include <memory>
+#include <utility>
 
 namespace Holonight::Adapters {
 namespace {
 
 using ParserPtr = std::unique_ptr<JsonParser, decltype(&g_object_unref)>;
 
-void diagnose(ParseResult &result, std::string code, std::string path, std::string message) {
-  result.diagnostics.push_back({std::move(code), std::move(path), std::move(message)});
+void diagnose(ParseResult& result, std::string code, std::string path, std::string message) {
+  result.diagnostics.push_back({.code = std::move(code), .path = std::move(path), .message = std::move(message)});
 }
 
-bool member(JsonObject *object, const char *name, JsonNodeType type, ParseResult &result) {
-  if (!json_object_has_member(object, name)) {
+bool member(JsonObject* object, const char* name, JsonNodeType type, ParseResult& result) {
+  if (json_object_has_member(object, name) == 0) {
     diagnose(result, "missing_field", name, "required field is missing");
     return false;
   }
-  JsonNode *node = json_object_get_member(object, name);
+  JsonNode* node = json_object_get_member(object, name);
   if (json_node_get_node_type(node) != type) {
     diagnose(result, "wrong_type", name, "field has the wrong JSON type");
     return false;
@@ -27,7 +29,7 @@ bool member(JsonObject *object, const char *name, JsonNodeType type, ParseResult
   return true;
 }
 
-std::string stringMember(JsonObject *object, const char *name, ParseResult &result) {
+std::string stringMember(JsonObject* object, const char* name, ParseResult& result) {
   if (!member(object, name, JSON_NODE_VALUE, result) ||
       json_node_get_value_type(json_object_get_member(object, name)) != G_TYPE_STRING) {
     if (result.diagnostics.empty() || result.diagnostics.back().path != name) {
@@ -35,7 +37,7 @@ std::string stringMember(JsonObject *object, const char *name, ParseResult &resu
     }
     return {};
   }
-  const char *value = json_object_get_string_member(object, name);
+  const char* value = json_object_get_string_member(object, name);
   if (value == nullptr || *value == '\0') {
     diagnose(result, "invalid_value", name, "field must not be empty");
     return {};
@@ -43,7 +45,7 @@ std::string stringMember(JsonObject *object, const char *name, ParseResult &resu
   return value;
 }
 
-int intMember(JsonObject *object, const char *name, ParseResult &result) {
+int intMember(JsonObject* object, const char* name, ParseResult& result) {
   if (!member(object, name, JSON_NODE_VALUE, result) ||
       json_node_get_value_type(json_object_get_member(object, name)) != G_TYPE_INT64) {
     if (result.diagnostics.empty() || result.diagnostics.back().path != name) {
@@ -64,46 +66,49 @@ std::optional<Color> parseColor(std::string_view value) {
     return std::nullopt;
   }
   Color result;
-  std::array<std::uint8_t *, 4> channels{&result.red, &result.green, &result.blue, &result.alpha};
-  for (std::size_t index = 0; index < channels.size(); ++index) {
+  std::array<std::uint8_t*, 4> channels{&result.red, &result.green, &result.blue, &result.alpha};
+  std::size_t offset = 1;
+  for (auto* channel : channels) {
     unsigned parsed = 0;
-    const char *begin = value.data() + 1 + (index * 2);
-    const auto conversion = std::from_chars(begin, begin + 2, parsed, 16);
-    if (conversion.ec != std::errc{} || conversion.ptr != begin + 2) {
+    const auto digits = value.substr(offset, 2);
+    const char* end = std::next(digits.data(), 2);
+    const auto conversion = std::from_chars(digits.data(), end, parsed, 16);
+    if (conversion.ec != std::errc{} || conversion.ptr != end) {
       return std::nullopt;
     }
     // Uppercase is deliberately rejected to keep one canonical wire representation.
-    if ((begin[0] >= 'A' && begin[0] <= 'F') || (begin[1] >= 'A' && begin[1] <= 'F')) {
+    if (std::ranges::any_of(digits, [](char digit) { return digit >= 'A' && digit <= 'F'; })) {
       return std::nullopt;
     }
-    *channels[index] = static_cast<std::uint8_t>(parsed);
+    *channel = static_cast<std::uint8_t>(parsed);
+    offset += 2;
   }
   return result;
 }
 
-} // namespace
+}  // namespace
 
 ParseResult parseSemanticAppearance(std::string_view json) {
   ParseResult result;
   ParserPtr parser(json_parser_new(), &g_object_unref);
-  GError *error = nullptr;
-  if (!json_parser_load_from_data(parser.get(), json.data(), static_cast<gssize>(json.size()), &error)) {
+  GError* error = nullptr;
+  if (json_parser_load_from_data(parser.get(), json.data(), static_cast<gssize>(json.size()), &error) == 0) {
     diagnose(result, "malformed_json", "$", error != nullptr ? error->message : "invalid JSON");
     g_clear_error(&error);
     return result;
   }
-  JsonNode *root = json_parser_get_root(parser.get());
+  JsonNode* root = json_parser_get_root(parser.get());
   if (root == nullptr || json_node_get_node_type(root) != JSON_NODE_OBJECT) {
     diagnose(result, "wrong_type", "$", "root must be an object");
     return result;
   }
 
-  JsonObject *object = json_node_get_object(root);
+  JsonObject* object = json_node_get_object(root);
   Snapshot snapshot;
   if (member(object, "contract_version", JSON_NODE_VALUE, result) &&
       json_node_get_value_type(json_object_get_member(object, "contract_version")) == G_TYPE_INT64) {
     const auto version = json_object_get_int_member(object, "contract_version");
-    if (version != kContractVersion) {
+    if (std::cmp_not_equal(version, kContractVersion)) {
       diagnose(result, "unsupported_version", "contract_version", "only semantic appearance contract v1 is supported");
     } else {
       snapshot.contract_version = static_cast<std::uint32_t>(version);
@@ -120,14 +125,14 @@ ParseResult parseSemanticAppearance(std::string_view json) {
   }
 
   for (std::size_t index = 0; index < kColorRoleNames.size(); ++index) {
-    const std::string name(kColorRoleNames[index]);
+    const std::string name(kColorRoleNames.at(index));
     const std::string encoded = stringMember(object, name.c_str(), result);
     if (!encoded.empty()) {
       const auto color = parseColor(encoded);
       if (!color) {
         diagnose(result, "invalid_color", name, "color must be lowercase sRGB #rrggbbaa");
       } else {
-        snapshot.colors[index] = *color;
+        snapshot.colors.at(index) = *color;
       }
     }
   }
@@ -147,14 +152,15 @@ ParseResult parseSemanticAppearance(std::string_view json) {
 }
 
 std::string encodeColor(Color color) {
-  constexpr char hex[] = "0123456789abcdef";
-  std::string result = "#00000000";
+  constexpr std::string_view hex = "0123456789abcdef";
+  std::string result = "#";
+  result.reserve(9);
   const std::array values{color.red, color.green, color.blue, color.alpha};
-  for (std::size_t index = 0; index < values.size(); ++index) {
-    result[1 + index * 2] = hex[values[index] >> 4];
-    result[2 + index * 2] = hex[values[index] & 0x0f];
+  for (const auto channel : values) {
+    result.push_back(hex.at(static_cast<std::size_t>(channel >> 4)));
+    result.push_back(hex.at(static_cast<std::size_t>(channel & 0x0f)));
   }
   return result;
 }
 
-} // namespace Holonight::Adapters
+}  // namespace Holonight::Adapters

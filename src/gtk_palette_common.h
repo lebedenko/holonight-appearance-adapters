@@ -6,6 +6,6 @@
 
 namespace Holonight::Adapters::GtkPalette {
 
-[[nodiscard]] std::string definitions(const Snapshot &snapshot);
+[[nodiscard]] std::string definitions(const Snapshot& snapshot);
 
-} // namespace Holonight::Adapters::GtkPalette
+}  // namespace Holonight::Adapters::GtkPalette

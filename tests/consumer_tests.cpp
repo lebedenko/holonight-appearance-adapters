@@ -92,3 +92,25 @@ TEST(Projection, OmitsUnavailableGSettingsSchemasAndKeys) {
   ASSERT_EQ(filtered.size(), 1U);
   EXPECT_EQ(filtered.at("org.gnome.desktop.interface/icon-theme"), "HoloNight");
 }
+
+TEST(Consumer, PreservesRgbaChannelOrderAndCanonicalEncodingAtBoundaries) {
+  using Holonight::Adapters::Color;
+  struct Example {
+    Color color;
+    std::string_view encoded;
+  };
+  const std::array examples{
+      Example{.color = {.red = 0, .green = 0, .blue = 0, .alpha = 0}, .encoded = "#00000000"},
+      Example{.color = {.red = 255, .green = 255, .blue = 255, .alpha = 255}, .encoded = "#ffffffff"},
+      Example{.color = {.red = 0, .green = 128, .blue = 255, .alpha = 1}, .encoded = "#0080ff01"},
+      Example{.color = {.red = 18, .green = 52, .blue = 86, .alpha = 120}, .encoded = "#12345678"},
+  };
+  for (const auto& example : examples) {
+    EXPECT_EQ(Holonight::Adapters::encodeColor(example.color), example.encoded);
+    std::string json = validJson();
+    json.replace(json.find("#123456ff"), 9, example.encoded);
+    const auto parsed = parseSemanticAppearance(json);
+    ASSERT_TRUE(parsed) << example.encoded;
+    EXPECT_EQ(parsed.value->colors.front(), example.color);
+  }
+}

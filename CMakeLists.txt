@@ -131,6 +131,7 @@ if(CLANG_TIDY)
   add_custom_target(tidy
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/prepare_tidy.cmake
     COMMAND ${CLANG_TIDY} -p ${TIDY_DB_DIR}
+    -header-filter "^${CMAKE_CURRENT_SOURCE_DIR}/(include|src)/.*\\.(h|hpp|inc)$"
     ${CMAKE_CURRENT_SOURCE_DIR}/src/consumer.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/tier1_projection.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_bridge.cpp
@@ -139,7 +140,8 @@ if(CLANG_TIDY)
     ${CMAKE_CURRENT_SOURCE_DIR}/src/labwc_fallback.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk_palette_common.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk3_palette.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk4_palette.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk4_palette.cpp
+    VERBATIM)
 endif()
 
 # Palette and probe targets remain non-installed discovery evidence.

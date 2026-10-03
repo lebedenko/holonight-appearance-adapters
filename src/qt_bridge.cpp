@@ -9,7 +9,7 @@
 namespace Holonight::Adapters {
 namespace {
 
-QString color(const QColor &value) {
+QString color(const QColor& value) {
   return QStringLiteral("#%1%2%3%4")
       .arg(value.red(), 2, 16, QLatin1Char('0'))
       .arg(value.green(), 2, 16, QLatin1Char('0'))
@@ -17,9 +17,9 @@ QString color(const QColor &value) {
       .arg(value.alpha(), 2, 16, QLatin1Char('0'));
 }
 
-} // namespace
+}  // namespace
 
-QByteArray serializeSemanticAppearance(const SemanticAppearance &value) {
+QByteArray serializeSemanticAppearance(const SemanticAppearance& value) {
   QJsonObject object;
   object[QStringLiteral("contract_version")] = static_cast<qint64>(value.contract_version);
   object[QStringLiteral("scheme_id")] = value.scheme_id;
@@ -63,4 +63,4 @@ QByteArray serializeSemanticAppearance(const SemanticAppearance &value) {
   return QJsonDocument(object).toJson(QJsonDocument::Compact);
 }
 
-} // namespace Holonight::Adapters
+}  // namespace Holonight::Adapters

@@ -1,16 +1,15 @@
+// GLib D-Bus structs contain a signals field; include them before Qt keywords.
+// clang-format off
 #include <gio/gio.h>
+// clang-format on
 
+#include "holonight/appearance.h"
 #include "holonight/appearance_contract.h"
 #include "holonight/qt_bridge.h"
 #include "holonight/tier1_projection.h"
-
-#include "holonight/appearance.h"
+#include "labwc_theme.h"
 #include "semanticappearance.h"
 
-#include <holonight/config/appearance.h>
-#include <holonight/config/store.h>
-
-#include "labwc_theme.h"
 #include <QCoreApplication>
 #include <QDir>
 #include <QDomDocument>
@@ -24,7 +23,11 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QTemporaryDir>
-#include <signal.h>
+
+#include <csignal>
+#include <holonight/config/appearance.h>
+#include <holonight/config/store.h>
+#include <ranges>
 #include <unistd.h>
 
 #ifdef HOLONIGHT_HAVE_KCONFIG
@@ -64,97 +67,116 @@ QString configHome() {
 
 QString statePath() {
   QString value = qEnvironmentVariable("XDG_STATE_HOME");
-  if (value.isEmpty())
+  if (value.isEmpty()) {
     value = QDir::homePath() + QStringLiteral("/.local/state");
+  }
   return value + QStringLiteral("/holonight/appearance-adapters.json");
 }
 
-QJsonObject outputJson(const Output &output) {
-  QJsonObject value{{QStringLiteral("name"), output.name},
-                    {QStringLiteral("status"), output.status},
-                    {QStringLiteral("apply_mode"), output.mode}};
-  if (!output.diagnostic.isEmpty())
+QJsonObject outputJson(const Output& output) {
+  QJsonObject value{
+      {QStringLiteral("name"), output.name},
+      {QStringLiteral("status"), output.status},
+      {QStringLiteral("apply_mode"), output.mode},
+  };
+  if (!output.diagnostic.isEmpty()) {
     value[QStringLiteral("diagnostic")] = output.diagnostic;
+  }
   return value;
 }
 
-int respond(QString operation, const QList<Output> &outputs, bool hard_error = false) {
+int respond(QString operation, const QList<Output>& outputs, bool hard_error = false) {
   bool degraded = false;
   QJsonArray encoded;
-  for (const Output &output : outputs) {
+  for (const Output& output : outputs) {
     encoded.append(outputJson(output));
     degraded = degraded || output.status == QStringLiteral("unavailable") ||
                output.status == QStringLiteral("delegated") || output.status == QStringLiteral("application-owned") ||
                output.status == QStringLiteral("conflict");
   }
-  const QString result = hard_error ? QStringLiteral("error")
-                         : degraded ? QStringLiteral("degraded")
-                                    : QStringLiteral("success");
-  const QJsonObject root{{QStringLiteral("protocol_version"), kProtocolVersion},
-                         {QStringLiteral("operation"), operation},
-                         {QStringLiteral("result"), result},
-                         {QStringLiteral("success"), !hard_error},
-                         {QStringLiteral("degraded"), degraded},
-                         {QStringLiteral("outputs"), encoded}};
+  QString result = QStringLiteral("success");
+  if (hard_error) {
+    result = QStringLiteral("error");
+  } else if (degraded) {
+    result = QStringLiteral("degraded");
+  }
+  const QJsonObject root{
+      {QStringLiteral("protocol_version"), kProtocolVersion},
+      {QStringLiteral("operation"), operation},
+      {QStringLiteral("result"), result},
+      {QStringLiteral("success"), !hard_error},
+      {QStringLiteral("degraded"), degraded},
+      {QStringLiteral("outputs"), encoded},
+  };
   QFile standard_output;
-  if (!standard_output.open(stdout, QIODevice::WriteOnly))
+  if (!standard_output.open(stdout, QIODevice::WriteOnly)) {
     return 1;
+  }
   standard_output.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
   standard_output.write("\n");
   return hard_error ? 1 : 0;
 }
 
-std::optional<QJsonObject> readJsonObject(const QString &path) {
+std::optional<QJsonObject> readJsonObject(const QString& path) {
   QFile file(path);
-  if (!file.exists())
+  if (!file.exists()) {
     return QJsonObject{};
-  if (!file.open(QIODevice::ReadOnly))
+  }
+  if (!file.open(QIODevice::ReadOnly)) {
     return std::nullopt;
+  }
   QJsonParseError error;
   const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
-  if (error.error != QJsonParseError::NoError || !document.isObject())
+  if (error.error != QJsonParseError::NoError || !document.isObject()) {
     return std::nullopt;
+  }
   return document.object();
 }
 
-bool writeJsonObject(const QString &path, const QJsonObject &object) {
-  if (!QDir().mkpath(QFileInfo(path).absolutePath()))
+bool writeJsonObject(const QString& path, const QJsonObject& object) {
+  if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
     return false;
+  }
   QSaveFile file(path);
-  if (!file.open(QIODevice::WriteOnly))
+  if (!file.open(QIODevice::WriteOnly)) {
     return false;
-  if (file.write(QJsonDocument(object).toJson(QJsonDocument::Compact)) < 0)
+  }
+  if (file.write(QJsonDocument(object).toJson(QJsonDocument::Compact)) < 0) {
     return false;
+  }
   return file.commit();
 }
 
-std::optional<QString> iniValue(const QString &path, const QString &key) { // NOLINT
+std::optional<QString> iniValue(const QString& path, const QString& key) {  // NOLINT
   QFile file(path);
-  if (!file.open(QIODevice::ReadOnly))
+  if (!file.open(QIODevice::ReadOnly)) {
     return std::nullopt;
+  }
   bool settings = false;
-  for (const QByteArray &raw : file.readAll().split('\n')) {
+  for (const QByteArray& raw : file.readAll().split('\n')) {
     const QString line = QString::fromUtf8(raw);
     const QString trimmed = line.trimmed();
     if (trimmed.startsWith(u'[') && trimmed.endsWith(u']')) {
       settings = trimmed == QStringLiteral("[Settings]");
     } else if (settings) {
       const qsizetype equals = line.indexOf(u'=');
-      if (equals >= 0 && line.left(equals).trimmed() == key)
+      if (equals >= 0 && line.left(equals).trimmed() == key) {
         return line.mid(equals + 1).trimmed();
+      }
     }
   }
   return std::nullopt;
 }
 
-bool setIniValue(const QString &path, const QString &key, const std::optional<QString> &value) { // NOLINT
+bool setIniValue(const QString& path, const QString& key, const std::optional<QString>& value) {  // NOLINT
   QFile input(path);
   QByteArray contents;
   QFileDevice::Permissions permissions{};
   if (input.exists()) {
     permissions = input.permissions();
-    if (!input.open(QIODevice::ReadOnly))
+    if (!input.open(QIODevice::ReadOnly)) {
       return false;
+    }
     contents = input.readAll();
   }
   QList<QByteArray> lines = contents.split('\n');
@@ -167,17 +189,20 @@ bool setIniValue(const QString &path, const QString &key, const std::optional<QS
     const QString line = QString::fromUtf8(lines[index]);
     const QString trimmed = line.trimmed();
     if (trimmed.startsWith(u'[') && trimmed.endsWith(u']')) {
-      if (settings && insert_at == lines.size())
+      if (settings && insert_at == lines.size()) {
         insert_at = index;
+      }
       settings = trimmed == QStringLiteral("[Settings]");
       section_found = section_found || settings;
       continue;
     }
-    if (!settings)
+    if (!settings) {
       continue;
+    }
     const qsizetype equals = line.indexOf(u'=');
-    if (equals < 0 || line.left(equals).trimmed() != key)
+    if (equals < 0 || line.left(equals).trimmed() != key) {
       continue;
+    }
     key_found = true;
     if (value) {
       const QByteArray replacement = (key + u'=' + *value).toUtf8();
@@ -191,55 +216,64 @@ bool setIniValue(const QString &path, const QString &key, const std::optional<QS
   }
   if (!key_found && value) {
     if (!section_found) {
-      if (!lines.isEmpty() && !lines.last().isEmpty())
+      if (!lines.isEmpty() && !lines.last().isEmpty()) {
         lines.append(QByteArray{});
+      }
       lines.append("[Settings]");
       insert_at = lines.size();
     }
     lines.insert(insert_at, (key + u'=' + *value).toUtf8());
     changed = true;
   }
-  if (!changed)
+  if (!changed) {
     return true;
-  if (!QDir().mkpath(QFileInfo(path).absolutePath()))
+  }
+  if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
     return false;
+  }
   QSaveFile output(path);
-  if (!output.open(QIODevice::WriteOnly))
+  if (!output.open(QIODevice::WriteOnly)) {
     return false;
-  if (permissions != QFileDevice::Permissions{})
+  }
+  if (permissions != QFileDevice::Permissions{}) {
     output.setPermissions(permissions);
+  }
   QByteArray updated = lines.join('\n');
-  if (!updated.endsWith('\n'))
+  if (!updated.endsWith('\n')) {
     updated.append('\n');
-  if (output.write(updated) != updated.size())
+  }
+  if (output.write(updated) != updated.size()) {
     return false;
+  }
   return output.commit();
 }
 
-bool kdeFontKey(const QString &key) { return key == QStringLiteral("font") || key == QStringLiteral("fixed"); }
+bool kdeFontKey(const QString& key) { return key == QStringLiteral("font") || key == QStringLiteral("fixed"); }
 
-QString kdeGroup(const QString &key) {
+QString kdeGroup(const QString& key) {
   const qsizetype slash = key.indexOf(u'/');
   return key.left(slash);
 }
 
-QString kdeMember(const QString &key) { return key.mid(key.indexOf(u'/') + 1); }
+QString kdeMember(const QString& key) { return key.mid(key.indexOf(u'/') + 1); }
 
-QFont projectedFont(const Snapshot &snapshot, bool fixed) {
+QFont projectedFont(const Snapshot& snapshot, bool fixed) {
   QFont font(QString::fromStdString(fixed ? snapshot.monospace_font_family : snapshot.ui_font_family));
   font.setPointSize(fixed ? snapshot.monospace_font_point_size : snapshot.ui_font_point_size);
   return font;
 }
 
-std::optional<QString> kdeValue(const QString &path, const QString &key) { // NOLINT
+std::optional<QString> kdeValue(const QString& path, const QString& key) {  // NOLINT
 #ifdef HOLONIGHT_HAVE_KCONFIG
   KConfig config(path, KConfig::SimpleConfig);
   KConfigGroup group(&config, kdeGroup(key));
   const QString member = kdeMember(key);
-  if (!group.hasKey(member))
+  if (!group.hasKey(member)) {
     return std::nullopt;
-  if (kdeFontKey(member))
+  }
+  if (kdeFontKey(member)) {
     return group.readEntry(member, QFont()).toString();
+  }
   return group.readEntry(member, QString());
 #else
   Q_UNUSED(path)
@@ -248,24 +282,28 @@ std::optional<QString> kdeValue(const QString &path, const QString &key) { // NO
 #endif
 }
 
-bool setKdeValue(const QString &path, const QString &key, const std::optional<QString> &value) { // NOLINT
+bool setKdeValue(const QString& path, const QString& key, const std::optional<QString>& value) {  // NOLINT
 #ifdef HOLONIGHT_HAVE_KCONFIG
-  if (!QDir().mkpath(QFileInfo(path).absolutePath()))
+  if (!QDir().mkpath(QFileInfo(path).absolutePath())) {
     return false;
+  }
   KConfig config(path, KConfig::SimpleConfig);
   KConfigGroup group(&config, kdeGroup(key));
   const QString member = kdeMember(key);
-  if (group.isEntryImmutable(member))
+  if (group.isEntryImmutable(member)) {
     return false;
-  if (!value)
+  }
+  if (!value) {
     group.deleteEntry(member, KConfigBase::Notify);
-  else if (kdeFontKey(member)) {
+  } else if (kdeFontKey(member)) {
     QFont font;
-    if (!font.fromString(*value))
+    if (!font.fromString(*value)) {
       return false;
+    }
     group.writeEntry(member, font, KConfigBase::Notify);
-  } else
+  } else {
     group.writeEntry(member, *value, KConfigBase::Notify);
+  }
   return config.sync();
 #else
   Q_UNUSED(path)
@@ -275,27 +313,32 @@ bool setKdeValue(const QString &path, const QString &key, const std::optional<QS
 #endif
 }
 
-std::map<QString, QString> kdeProjection(const Snapshot &snapshot) {
-  return {{QStringLiteral("General/ColorScheme"), QString::fromStdString(snapshot.scheme_id)},
-          {QStringLiteral("General/font"), projectedFont(snapshot, false).toString()},
-          {QStringLiteral("General/fixed"), projectedFont(snapshot, true).toString()},
-          {QStringLiteral("Icons/Theme"), QString::fromStdString(snapshot.icon_theme)},
-          {QStringLiteral("Mouse/cursorTheme"), QString::fromStdString(snapshot.cursor_theme)}};
+std::map<QString, QString> kdeProjection(const Snapshot& snapshot) {
+  return {
+      {QStringLiteral("General/ColorScheme"), QString::fromStdString(snapshot.scheme_id)},
+      {QStringLiteral("General/font"), projectedFont(snapshot, false).toString()},
+      {QStringLiteral("General/fixed"), projectedFont(snapshot, true).toString()},
+      {QStringLiteral("Icons/Theme"), QString::fromStdString(snapshot.icon_theme)},
+      {QStringLiteral("Mouse/cursorTheme"), QString::fromStdString(snapshot.cursor_theme)},
+  };
 }
 
-std::optional<QString> schemaKey(const QString &key, GSettingsSchema **schema_out) {
+std::optional<QString> schemaKey(const QString& key, GSettingsSchema** schema_out) {
   const qsizetype slash = key.indexOf(u'/');
-  if (slash < 1)
+  if (slash < 1) {
     return std::nullopt;
-  GSettingsSchemaSource *source = g_settings_schema_source_get_default();
-  if (source == nullptr)
+  }
+  GSettingsSchemaSource* source = g_settings_schema_source_get_default();
+  if (source == nullptr) {
     return std::nullopt;
+  }
   const QByteArray schema_name = key.left(slash).toUtf8();
-  GSettingsSchema *schema = g_settings_schema_source_lookup(source, schema_name.constData(), TRUE);
-  if (schema == nullptr)
+  GSettingsSchema* schema = g_settings_schema_source_lookup(source, schema_name.constData(), TRUE);
+  if (schema == nullptr) {
     return std::nullopt;
+  }
   const QByteArray member = key.mid(slash + 1).toUtf8();
-  if (!g_settings_schema_has_key(schema, member.constData())) {
+  if (g_settings_schema_has_key(schema, member.constData()) == 0) {
     g_settings_schema_unref(schema);
     return std::nullopt;
   }
@@ -303,51 +346,54 @@ std::optional<QString> schemaKey(const QString &key, GSettingsSchema **schema_ou
   return QString::fromUtf8(member);
 }
 
-std::optional<QString> getGSetting(const QString &target) {
-  GSettingsSchema *schema = nullptr;
+std::optional<QString> getGSetting(const QString& target) {
+  GSettingsSchema* schema = nullptr;
   const auto key = schemaKey(target, &schema);
-  if (!key)
+  if (!key) {
     return std::nullopt;
-  GSettings *settings = g_settings_new_full(schema, nullptr, nullptr);
-  GVariant *value = g_settings_get_value(settings, key->toUtf8().constData());
-  gchar *text = g_variant_print(value, FALSE);
+  }
+  GSettings* settings = g_settings_new_full(schema, nullptr, nullptr);
+  GVariant* value = g_settings_get_value(settings, key->toUtf8().constData());
+  gchar* text = g_variant_print(value, FALSE);
   QString result = QString::fromUtf8(text);
   g_free(text);
   g_variant_unref(value);
   g_object_unref(settings);
   g_settings_schema_unref(schema);
-  if (result.size() >= 2 && result.front() == u'\'' && result.back() == u'\'')
+  if (result.size() >= 2 && result.front() == u'\'' && result.back() == u'\'') {
     result = result.mid(1, result.size() - 2);
+  }
   return result;
 }
 
-bool setGSetting(const QString &target, const QString &value) { // NOLINT
-  GSettingsSchema *schema = nullptr;
+bool setGSetting(const QString& target, const QString& value) {  // NOLINT
+  GSettingsSchema* schema = nullptr;
   const auto key = schemaKey(target, &schema);
-  if (!key)
+  if (!key) {
     return false;
-  GSettings *settings = g_settings_new_full(schema, nullptr, nullptr);
-  const bool ok = g_settings_set_string(settings, key->toUtf8().constData(), value.toUtf8().constData());
+  }
+  GSettings* settings = g_settings_new_full(schema, nullptr, nullptr);
+  const bool written = g_settings_set_string(settings, key->toUtf8().constData(), value.toUtf8().constData()) != 0;
   g_settings_sync();
   g_object_unref(settings);
   g_settings_schema_unref(schema);
-  return ok;
+  return written;
 }
 
-std::optional<Snapshot> loadSnapshot(const QString &path, QString *diagnostic) {
+std::optional<Snapshot> loadSnapshot(const QString& path, QString* diagnostic) {
   const auto loaded = HoloNight::Config::load(path.toStdString());
   if (!loaded) {
     *diagnostic = QStringLiteral("canonical appearance is invalid");
     return std::nullopt;
   }
-  const auto resolved = Holonight::resolveAppearance(loaded.value.value().appearance); // NOLINT
+  const auto resolved = Holonight::resolveAppearance(loaded.value.value().appearance);  // NOLINT
   if (!resolved) {
     *diagnostic = QStringLiteral("canonical appearance cannot be resolved");
     return std::nullopt;
   }
   // NOLINTNEXTLINE(bugprone-unchecked-optional-access)
   const QByteArray wire = Holonight::Adapters::serializeSemanticAppearance(
-      Holonight::resolveSemanticAppearance(resolved.value.value())); // NOLINT
+      Holonight::resolveSemanticAppearance(resolved.value.value()));  // NOLINT
   const auto parsed = Holonight::Adapters::parseSemanticAppearance(wire.toStdString());
   if (!parsed) {
     *diagnostic = QStringLiteral("semantic appearance v1 validation failed");
@@ -356,16 +402,17 @@ std::optional<Snapshot> loadSnapshot(const QString &path, QString *diagnostic) {
   return parsed.value;
 }
 
-QJsonObject stateEntry(const std::optional<QString> &original, const QString &last, const QString &kind,
-                       const QString &target, const QString &key = {}) { // NOLINT
+QJsonObject stateEntry(const std::optional<QString>& original, const QString& last, const QString& kind,
+                       const QString& target, const QString& key = {}) {  // NOLINT
   QJsonObject entry{{QStringLiteral("last"), last}, {QStringLiteral("kind"), kind}, {QStringLiteral("target"), target}};
   entry[QStringLiteral("original")] = original ? QJsonValue(*original) : QJsonValue(QJsonValue::Null);
-  if (!key.isEmpty())
+  if (!key.isEmpty()) {
     entry[QStringLiteral("key")] = key;
+  }
   return entry;
 }
 
-std::optional<QString> originalValue(const QJsonObject &old, const std::optional<QString> &current) {
+std::optional<QString> originalValue(const QJsonObject& old, const std::optional<QString>& current) {
   if (!old.isEmpty() && old.contains(QStringLiteral("original"))) {
     const QJsonValue value = old.value(QStringLiteral("original"));
     return value.isNull() ? std::nullopt : std::optional<QString>(value.toString());
@@ -375,121 +422,197 @@ std::optional<QString> originalValue(const QJsonObject &old, const std::optional
 
 #include "labwc_adapter.inc"
 
-void restoreUndo(const QList<Undo> &undo) {
-  for (auto iterator = undo.crbegin(); iterator != undo.crend(); ++iterator) {
-    if (iterator->kind == Undo::Kind::File)
-      setFileValue(iterator->target, iterator->value);
-    else if (iterator->kind == Undo::Kind::LabwcFont)
-      setLabwcFontValue(iterator->target, iterator->key, iterator->value);
-    else if (iterator->kind == Undo::Kind::Gtk)
-      setIniValue(iterator->target, iterator->key, iterator->value);
-    else if (iterator->kind == Undo::Kind::Kde)
-      setKdeValue(iterator->target, iterator->key, iterator->value);
-    else if (iterator->value)
-      setGSetting(iterator->target, *iterator->value); // NOLINT(bugprone-unchecked-optional-access)
+void restoreUndo(const QList<Undo>& undo) {
+  for (const auto& item : std::views::reverse(undo)) {
+    if (item.kind == Undo::Kind::File) {
+      setFileValue(item.target, item.value);
+    } else if (item.kind == Undo::Kind::LabwcFont) {
+      setLabwcFontValue(item.target, item.key, item.value);
+    } else if (item.kind == Undo::Kind::Gtk) {
+      setIniValue(item.target, item.key, item.value);
+    } else if (item.kind == Undo::Kind::Kde) {
+      setKdeValue(item.target, item.key, item.value);
+    } else if (item.value) {
+      setGSetting(item.target, *item.value);  // NOLINT(bugprone-unchecked-optional-access)
+    }
   }
 }
 
-int apply(const QString &appearance) {
-  QString diagnostic;
-  const auto snapshot = loadSnapshot(appearance, &diagnostic);
-  if (!snapshot)
-    return respond(QStringLiteral("apply"),
-                   {{QStringLiteral("canonical"), QStringLiteral("error"), QStringLiteral("live"), diagnostic}}, true);
-  const Tier1Projection projection = Holonight::Adapters::projectTier1(*snapshot);
-  const auto state_document = readJsonObject(statePath());
-  if (!state_document)
-    return respond(QStringLiteral("apply"),
-                   {{QStringLiteral("state"), QStringLiteral("error"), QStringLiteral("live"),
-                     QStringLiteral("state is corrupt or unreadable")}},
-                   true);
-  QJsonObject state = *state_document;
-  QJsonObject entries = state.value(QStringLiteral("entries")).toObject();
-  QList<Output> outputs;
-  QList<Undo> undo;
-
-  for (const auto &[target_value, projected] : projection.gsettings) {
+bool applyGSettings(const Tier1Projection& projection, QJsonObject& entries, QList<Output>& outputs,
+                    QList<Undo>& undo) {
+  for (const auto& [target_value, projected] : projection.gsettings) {
     const QString target = QString::fromStdString(target_value);
     const QString desired = QString::fromStdString(projected);
     const auto current = getGSetting(target);
     if (!current) {
-      outputs.append({target, QStringLiteral("unavailable"), QStringLiteral("live"),
-                      QStringLiteral("schema or key is unavailable")});
+      outputs.append({
+          .name = target,
+          .status = QStringLiteral("unavailable"),
+          .mode = QStringLiteral("live"),
+          .diagnostic = QStringLiteral("schema or key is unavailable"),
+      });
       continue;
     }
     if (*current != desired && !setGSetting(target, desired)) {
       restoreUndo(undo);
-      outputs.append({target, QStringLiteral("error"), QStringLiteral("live"),
-                      QStringLiteral("writable GSettings output rejected the update")});
-      return respond(QStringLiteral("apply"), outputs, true);
+      outputs.append({
+          .name = target,
+          .status = QStringLiteral("error"),
+          .mode = QStringLiteral("live"),
+          .diagnostic = QStringLiteral("writable GSettings output rejected the update"),
+      });
+      return false;
     }
-    if (*current != desired)
-      undo.append({Undo::Kind::GSettings, target, {}, current});
+    if (*current != desired) {
+      undo.append({.kind = Undo::Kind::GSettings, .target = target, .key = {}, .value = current});
+    }
     const QJsonObject old = entries.value(target).toObject();
     entries[target] = stateEntry(originalValue(old, current), desired, QStringLiteral("gsettings"), target);
-    outputs.append({target,
-                    *current == desired ? QStringLiteral("unchanged") : QStringLiteral("applied"),
-                    QStringLiteral("live"),
-                    {}});
+    outputs.append({
+        .name = target,
+        .status = *current == desired ? QStringLiteral("unchanged") : QStringLiteral("applied"),
+        .mode = QStringLiteral("live"),
+        .diagnostic = {},
+    });
   }
 
-  const QList<std::pair<QString, const std::map<std::string, std::string> *>> gtk{
+  return true;
+}
+
+bool applyGtkSettings(const Tier1Projection& projection, QJsonObject& entries, QList<Output>& outputs,
+                      QList<Undo>& undo) {
+  const QList<std::pair<QString, const std::map<std::string, std::string>*>> gtk{
       {configHome() + QStringLiteral("/gtk-3.0/settings.ini"), &projection.gtk3_settings},
-      {configHome() + QStringLiteral("/gtk-4.0/settings.ini"), &projection.gtk4_settings}};
-  for (const auto &[path, values] : gtk) {
+      {configHome() + QStringLiteral("/gtk-4.0/settings.ini"), &projection.gtk4_settings},
+  };
+  for (const auto& [path, values] : gtk) {
     const QString major = path.contains(QStringLiteral("gtk-3.0")) ? QStringLiteral("gtk3") : QStringLiteral("gtk4");
-    for (const auto &[key_value, projected] : *values) {
+    for (const auto& [key_value, projected] : *values) {
       const QString key = QString::fromStdString(key_value);
       const QString desired = QString::fromStdString(projected);
       const auto current = iniValue(path, key);
       if (!setIniValue(path, key, desired)) {
         restoreUndo(undo);
-        outputs.append({major + u'/' + key, QStringLiteral("error"), QStringLiteral("relaunch"),
-                        QStringLiteral("GTK settings file could not be updated atomically")});
-        return respond(QStringLiteral("apply"), outputs, true);
+        outputs.append({
+            .name = major + u'/' + key,
+            .status = QStringLiteral("error"),
+            .mode = QStringLiteral("relaunch"),
+            .diagnostic = QStringLiteral("GTK settings file could not be updated atomically"),
+        });
+        return false;
       }
-      if (current != std::optional<QString>(desired))
-        undo.append({Undo::Kind::Gtk, path, key, current});
-      const QString id = major + u'/' + key;
-      const QJsonObject old = entries.value(id).toObject();
-      entries[id] = stateEntry(originalValue(old, current), desired, QStringLiteral("gtk"), path, key);
-      outputs.append(
-          {id,
-           current == std::optional<QString>(desired) ? QStringLiteral("unchanged") : QStringLiteral("applied"),
-           QStringLiteral("relaunch"),
-           {}});
+      if (current != std::optional<QString>(desired)) {
+        undo.append({.kind = Undo::Kind::Gtk, .target = path, .key = key, .value = current});
+      }
+      const QString output_id = major + u'/' + key;
+      const QJsonObject old = entries.value(output_id).toObject();
+      entries[output_id] = stateEntry(originalValue(old, current), desired, QStringLiteral("gtk"), path, key);
+      outputs.append({
+          .name = output_id,
+          .status =
+              current == std::optional<QString>(desired) ? QStringLiteral("unchanged") : QStringLiteral("applied"),
+          .mode = QStringLiteral("relaunch"),
+          .diagnostic = {},
+      });
     }
   }
 
+  return true;
+}
+
+bool applyKdeSettings(const Snapshot& snapshot, QJsonObject& entries, QList<Output>& outputs, QList<Undo>& undo) {
 #ifdef HOLONIGHT_HAVE_KCONFIG
   const QString kde_path = configHome() + QStringLiteral("/kdeglobals");
-  for (const auto &[key, desired] : kdeProjection(*snapshot)) {
-    const QString id = QStringLiteral("kde/") + key;
+  for (const auto& [key, desired] : kdeProjection(snapshot)) {
+    const QString output_id = QStringLiteral("kde/") + key;
     const auto current = kdeValue(kde_path, key);
     if (current != std::optional<QString>(desired) && !setKdeValue(kde_path, key, desired)) {
       restoreUndo(undo);
-      outputs.append({id, QStringLiteral("error"), QStringLiteral("relaunch"),
-                      QStringLiteral("KDE configuration could not be updated")});
-      return respond(QStringLiteral("apply"), outputs, true);
+      outputs.append({
+          .name = output_id,
+          .status = QStringLiteral("error"),
+          .mode = QStringLiteral("relaunch"),
+          .diagnostic = QStringLiteral("KDE configuration could not be updated"),
+      });
+      return false;
     }
-    if (current != std::optional<QString>(desired))
-      undo.append({Undo::Kind::Kde, kde_path, key, current});
-    const QJsonObject old = entries.value(id).toObject();
-    entries[id] = stateEntry(originalValue(old, current), desired, QStringLiteral("kde"), kde_path, key);
-    outputs.append(
-        {id,
-         current == std::optional<QString>(desired) ? QStringLiteral("unchanged") : QStringLiteral("applied"),
-         QStringLiteral("relaunch"),
-         {}});
+    if (current != std::optional<QString>(desired)) {
+      undo.append({.kind = Undo::Kind::Kde, .target = kde_path, .key = key, .value = current});
+    }
+    const QJsonObject old = entries.value(output_id).toObject();
+    entries[output_id] = stateEntry(originalValue(old, current), desired, QStringLiteral("kde"), kde_path, key);
+    outputs.append({
+        .name = output_id,
+        .status = current == std::optional<QString>(desired) ? QStringLiteral("unchanged") : QStringLiteral("applied"),
+        .mode = QStringLiteral("relaunch"),
+        .diagnostic = {},
+    });
   }
 #else
-  outputs.append({QStringLiteral("kde"), QStringLiteral("unavailable"), QStringLiteral("relaunch"),
-                  QStringLiteral("KDE ConfigCore dependency was unavailable at build time")});
+  outputs.append({
+      .name = QStringLiteral("kde"),
+      .status = QStringLiteral("unavailable"),
+      .mode = QStringLiteral("relaunch"),
+      .diagnostic = QStringLiteral("KDE ConfigCore dependency was unavailable at build time"),
+  });
 #endif
+  return true;
+}
+
+int apply(const QString& appearance) {
+  QString diagnostic;
+  const auto snapshot = loadSnapshot(appearance, &diagnostic);
+  if (!snapshot) {
+    return respond(QStringLiteral("apply"),
+                   {
+                       {
+                           .name = QStringLiteral("canonical"),
+                           .status = QStringLiteral("error"),
+                           .mode = QStringLiteral("live"),
+                           .diagnostic = diagnostic,
+                       },
+                   },
+                   true);
+  }
+  const Tier1Projection projection = Holonight::Adapters::projectTier1(*snapshot);
+  const auto state_document = readJsonObject(statePath());
+  if (!state_document) {
+    return respond(QStringLiteral("apply"),
+                   {
+                       {
+                           .name = QStringLiteral("state"),
+                           .status = QStringLiteral("error"),
+                           .mode = QStringLiteral("live"),
+                           .diagnostic = QStringLiteral("state is corrupt or unreadable"),
+                       },
+                   },
+                   true);
+  }
+  QJsonObject state = *state_document;
+  QJsonObject entries = state.value(QStringLiteral("entries")).toObject();
+  QList<Output> outputs;
+  QList<Undo> undo;
+
+  if (!applyGSettings(projection, entries, outputs, undo)) {
+    return respond(QStringLiteral("apply"), outputs, true);
+  }
+
+  if (!applyGtkSettings(projection, entries, outputs, undo)) {
+    return respond(QStringLiteral("apply"), outputs, true);
+  }
+
+  if (!applyKdeSettings(*snapshot, entries, outputs, undo)) {
+    return respond(QStringLiteral("apply"), outputs, true);
+  }
   if (!applyLabwc(appearance, entries, outputs, undo)) {
     restoreUndo(undo);
     finishLabwcRecovery();
-    outputs.append({"labwc/theme", "error", "live", "labwc update failed; transaction rolled back"});
+    outputs.append({
+        .name = "labwc/theme",
+        .status = "error",
+        .mode = "live",
+        .diagnostic = "labwc update failed; transaction rolled back",
+    });
     return respond("apply", outputs, true);
   }
   state[QStringLiteral("protocol_version")] = kProtocolVersion;
@@ -497,84 +620,195 @@ int apply(const QString &appearance) {
   if (!writeJsonObject(statePath(), state)) {
     restoreUndo(undo);
     finishLabwcRecovery();
-    outputs.append({QStringLiteral("state"), QStringLiteral("error"), QStringLiteral("live"),
-                    QStringLiteral("adapter state could not be stored atomically")});
+    outputs.append({
+        .name = QStringLiteral("state"),
+        .status = QStringLiteral("error"),
+        .mode = QStringLiteral("live"),
+        .diagnostic = QStringLiteral("adapter state could not be stored atomically"),
+    });
     return respond(QStringLiteral("apply"), outputs, true);
   }
   finishLabwcRecovery();
-  if (std::any_of(undo.cbegin(), undo.cend(),
-                  [](const Undo &item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; }))
+  if (std::ranges::any_of(
+          undo, [](const Undo& item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; })) {
     reloadLabwc(outputs);
-  outputs.append({QStringLiteral("portal"), QStringLiteral("delegated"), QStringLiteral("delegated"),
-                  QStringLiteral("published by the HoloNight Shell Settings portal")});
-  outputs.append({QStringLiteral("xsettings"), QStringLiteral("unavailable"), QStringLiteral("delegated"),
-                  QStringLiteral("no competing XSettings manager is started")});
-  outputs.append({QStringLiteral("application-styling"), QStringLiteral("application-owned"),
-                  QStringLiteral("relaunch"), QStringLiteral("native and libadwaita styling is preserved")});
-  outputs.append({QStringLiteral("XCURSOR_THEME"), QStringLiteral("delegated"), QStringLiteral("session-restart"),
-                  QStringLiteral("exported by session startup integration")});
+  }
+  outputs.append({
+      .name = QStringLiteral("portal"),
+      .status = QStringLiteral("delegated"),
+      .mode = QStringLiteral("delegated"),
+      .diagnostic = QStringLiteral("published by the HoloNight Shell Settings portal"),
+  });
+  outputs.append({
+      .name = QStringLiteral("xsettings"),
+      .status = QStringLiteral("unavailable"),
+      .mode = QStringLiteral("delegated"),
+      .diagnostic = QStringLiteral("no competing XSettings manager is started"),
+  });
+  outputs.append({
+      .name = QStringLiteral("application-styling"),
+      .status = QStringLiteral("application-owned"),
+      .mode = QStringLiteral("relaunch"),
+      .diagnostic = QStringLiteral("native and libadwaita styling is preserved"),
+  });
+  outputs.append({
+      .name = QStringLiteral("XCURSOR_THEME"),
+      .status = QStringLiteral("delegated"),
+      .mode = QStringLiteral("session-restart"),
+      .diagnostic = QStringLiteral("exported by session startup integration"),
+  });
   return respond(QStringLiteral("apply"), outputs);
 }
 
-int status(const std::optional<QString> &appearance) {
+std::optional<QString> entryCurrent(const QJsonObject& entry) {
+  const QString kind = entry.value(QStringLiteral("kind")).toString();
+  const QString target = entry.value(QStringLiteral("target")).toString();
+  const QString key = entry.value(QStringLiteral("key")).toString();
+  if (kind.startsWith("labwc-")) {
+    return labwcCurrent(entry);
+  }
+  if (kind == QStringLiteral("gtk")) {
+    return iniValue(target, key);
+  }
+  if (kind == QStringLiteral("kde")) {
+    return kdeValue(target, key);
+  }
+  return getGSetting(target);
+}
+
+bool setEntryValue(const QJsonObject& entry, const std::optional<QString>& value) {
+  const QString kind = entry.value(QStringLiteral("kind")).toString();
+  const QString target = entry.value(QStringLiteral("target")).toString();
+  const QString key = entry.value(QStringLiteral("key")).toString();
+  if (kind.startsWith("labwc-")) {
+    return labwcSet(entry, value);
+  }
+  if (kind == QStringLiteral("gtk")) {
+    return setIniValue(target, key, value);
+  }
+  if (kind == QStringLiteral("kde")) {
+    return setKdeValue(target, key, value);
+  }
+  return value && setGSetting(target, *value);
+}
+
+Undo::Kind undoKind(const QString& kind) {
+  if (kind == "labwc-file") {
+    return Undo::Kind::File;
+  }
+  if (kind == "labwc-font") {
+    return Undo::Kind::LabwcFont;
+  }
+  if (kind == "gtk") {
+    return Undo::Kind::Gtk;
+  }
+  if (kind == "kde") {
+    return Undo::Kind::Kde;
+  }
+  return Undo::Kind::GSettings;
+}
+
+QString statusDiagnostic(bool disabled, bool redirected, bool stale, bool available) {
+  if (disabled) {
+    return QStringLiteral("HoloNight is no longer selected");
+  }
+  if (redirected) {
+    return QStringLiteral("configuration or data paths changed since last apply");
+  }
+  if (stale) {
+    return QStringLiteral("canonical appearance changed since last apply");
+  }
+  if (available) {
+    return {};
+  }
+  return QStringLiteral("output is absent or unavailable");
+}
+
+std::map<QString, QString> expectedProjection(const Snapshot& snapshot) {
+  std::map<QString, QString> expected;
+  const Tier1Projection projection = Holonight::Adapters::projectTier1(snapshot);
+  for (const auto& [key, value] : projection.gsettings) {
+    expected[QString::fromStdString(key)] = QString::fromStdString(value);
+  }
+  for (const auto& [key, value] : projection.gtk3_settings) {
+    expected[QStringLiteral("gtk3/") + QString::fromStdString(key)] = QString::fromStdString(value);
+  }
+  for (const auto& [key, value] : projection.gtk4_settings) {
+    expected[QStringLiteral("gtk4/") + QString::fromStdString(key)] = QString::fromStdString(value);
+  }
+  for (const auto& [key, value] : kdeProjection(snapshot)) {
+    expected[QStringLiteral("kde/") + key] = value;
+  }
+  return expected;
+}
+
+QMap<QString, QByteArray> labwcStatusFiles(const QJsonObject& state, const std::optional<QString>& appearance,
+                                           std::map<QString, QString>& expected) {
+  QMap<QString, QByteArray> labwcFiles;
+  const auto labwcValues = appearance ? labwcExpected(*appearance, &labwcFiles) : QMap<QString, QString>{};
+  for (auto it = labwcValues.begin(); it != labwcValues.end(); ++it) {
+    expected[it.key()] = it.value();
+  }
+  if (labwcFiles.isEmpty()) {
+    const auto themeEntry = state.value("entries").toObject().value("labwc/file/themerc").toObject();
+    if (!themeEntry.isEmpty()) {
+      labwcFiles["themerc"] = themeEntry["last"].toString().toUtf8();
+    }
+  }
+  return labwcFiles;
+}
+
+int status(const std::optional<QString>& appearance) {
   std::optional<Snapshot> snapshot;
   if (appearance) {
     QString diagnostic;
     snapshot = loadSnapshot(*appearance, &diagnostic);
-    if (!snapshot)
+    if (!snapshot) {
       return respond(QStringLiteral("status"),
-                     {{QStringLiteral("canonical"), QStringLiteral("error"), QStringLiteral("live"), diagnostic}},
+                     {
+                         {
+                             .name = QStringLiteral("canonical"),
+                             .status = QStringLiteral("error"),
+                             .mode = QStringLiteral("live"),
+                             .diagnostic = diagnostic,
+                         },
+                     },
                      true);
+    }
   }
-  std::map<QString, QString> expected;
-  if (snapshot) {
-    const Tier1Projection projection = Holonight::Adapters::projectTier1(*snapshot);
-    for (const auto &[key, value] : projection.gsettings)
-      expected[QString::fromStdString(key)] = QString::fromStdString(value);
-    for (const auto &[key, value] : projection.gtk3_settings)
-      expected[QStringLiteral("gtk3/") + QString::fromStdString(key)] = QString::fromStdString(value);
-    for (const auto &[key, value] : projection.gtk4_settings)
-      expected[QStringLiteral("gtk4/") + QString::fromStdString(key)] = QString::fromStdString(value);
-    for (const auto &[key, value] : kdeProjection(*snapshot))
-      expected[QStringLiteral("kde/") + key] = value;
-  }
+  auto expected = snapshot ? expectedProjection(*snapshot) : std::map<QString, QString>{};
   const auto state = readJsonObject(statePath());
-  if (!state)
+  if (!state) {
     return respond(QStringLiteral("status"),
-                   {{QStringLiteral("state"), QStringLiteral("error"), QStringLiteral("live"),
-                     QStringLiteral("state is corrupt or unreadable")}},
+                   {
+                       {
+                           .name = QStringLiteral("state"),
+                           .status = QStringLiteral("error"),
+                           .mode = QStringLiteral("live"),
+                           .diagnostic = QStringLiteral("state is corrupt or unreadable"),
+                       },
+                   },
                    true);
+  }
   QList<Output> outputs;
   const bool selected = labwcSelected(outputs);
-  QMap<QString, QByteArray> labwcFiles;
-  const auto labwcValues = appearance ? labwcExpected(*appearance, &labwcFiles) : QMap<QString, QString>{};
-  for (auto it = labwcValues.begin(); it != labwcValues.end(); ++it)
-    expected[it.key()] = it.value();
-  if (labwcFiles.isEmpty()) {
-    const auto themeEntry = state->value("entries").toObject().value("labwc/file/themerc").toObject();
-    if (!themeEntry.isEmpty())
-      labwcFiles["themerc"] = themeEntry["last"].toString().toUtf8();
-  }
-  if (!labwcFiles.isEmpty())
+  auto labwcFiles = labwcStatusFiles(*state, appearance, expected);
+  if (!labwcFiles.isEmpty()) {
     labwcOverrides(labwcFiles, outputs);
-  if (selected && !state->value("entries").toObject().contains("labwc/file/themerc"))
-    outputs.append({"labwc/theme", "unavailable", "live",
-                    "synchronized theme has not been applied; installed fallback may be in use"});
+  }
+  if (selected && !state->value("entries").toObject().contains("labwc/file/themerc")) {
+    outputs.append({
+        .name = "labwc/theme",
+        .status = "unavailable",
+        .mode = "live",
+        .diagnostic = "synchronized theme has not been applied; installed fallback may be in use",
+    });
+  }
   const QJsonObject entries = state->value(QStringLiteral("entries")).toObject();
   for (auto iterator = entries.begin(); iterator != entries.end(); ++iterator) {
     const QJsonObject entry = iterator.value().toObject();
     const QString kind = entry.value(QStringLiteral("kind")).toString();
-    std::optional<QString> current;
-    if (kind.startsWith("labwc-"))
-      current = labwcCurrent(entry);
-    else if (kind == QStringLiteral("gtk"))
-      current =
-          iniValue(entry.value(QStringLiteral("target")).toString(), entry.value(QStringLiteral("key")).toString());
-    else if (kind == QStringLiteral("kde"))
-      current =
-          kdeValue(entry.value(QStringLiteral("target")).toString(), entry.value(QStringLiteral("key")).toString());
-    else
-      current = getGSetting(entry.value(QStringLiteral("target")).toString());
+    const auto current = entryCurrent(entry);
     const QString mode = kind == QStringLiteral("gtk") || kind == QStringLiteral("kde") ? QStringLiteral("relaunch")
                                                                                         : QStringLiteral("live");
     const bool disabled = kind.startsWith("labwc-") && !selected;
@@ -584,34 +818,48 @@ int status(const std::optional<QString> &appearance) {
     const bool stale = disabled || redirected ||
                        (snapshot && expected.contains(iterator.key()) &&
                         expected.at(iterator.key()) != entry.value(QStringLiteral("last")).toString());
-    outputs.append({iterator.key(),
-                    !stale && current == std::optional<QString>(entry.value(QStringLiteral("last")).toString())
-                        ? QStringLiteral("applied")
-                        : QStringLiteral("conflict"),
-                    mode,
-                    disabled     ? QStringLiteral("HoloNight is no longer selected")
-                    : redirected ? QStringLiteral("configuration or data paths changed since last apply")
-                    : stale      ? QStringLiteral("canonical appearance changed since last apply")
-                    : current    ? QString{}
-                                 : QStringLiteral("output is absent or unavailable")});
+    outputs.append({
+        .name = iterator.key(),
+        .status = !stale && current == std::optional<QString>(entry.value(QStringLiteral("last")).toString())
+                      ? QStringLiteral("applied")
+                      : QStringLiteral("conflict"),
+        .mode = mode,
+        .diagnostic = statusDiagnostic(disabled, redirected, stale, current.has_value()),
+    });
   }
-  if (outputs.isEmpty())
-    outputs.append({QStringLiteral("state"), QStringLiteral("unavailable"), QStringLiteral("live"),
-                    QStringLiteral("appearance has not been applied")});
+  if (outputs.isEmpty()) {
+    outputs.append({
+        .name = QStringLiteral("state"),
+        .status = QStringLiteral("unavailable"),
+        .mode = QStringLiteral("live"),
+        .diagnostic = QStringLiteral("appearance has not been applied"),
+    });
+  }
 #ifndef HOLONIGHT_HAVE_KCONFIG
-  outputs.append({QStringLiteral("kde"), QStringLiteral("unavailable"), QStringLiteral("relaunch"),
-                  QStringLiteral("KDE ConfigCore dependency was unavailable at build time")});
+  outputs.append({
+      .name = QStringLiteral("kde"),
+      .status = QStringLiteral("unavailable"),
+      .mode = QStringLiteral("relaunch"),
+      .diagnostic = QStringLiteral("KDE ConfigCore dependency was unavailable at build time"),
+  });
 #endif
   return respond(QStringLiteral("status"), outputs);
 }
 
 int revert() {
   const auto state = readJsonObject(statePath());
-  if (!state)
+  if (!state) {
     return respond(QStringLiteral("revert"),
-                   {{QStringLiteral("state"), QStringLiteral("error"), QStringLiteral("live"),
-                     QStringLiteral("state is corrupt or unreadable")}},
+                   {
+                       {
+                           .name = QStringLiteral("state"),
+                           .status = QStringLiteral("error"),
+                           .mode = QStringLiteral("live"),
+                           .diagnostic = QStringLiteral("state is corrupt or unreadable"),
+                       },
+                   },
                    true);
+  }
   QJsonObject remaining;
   QList<Output> outputs;
   QList<Undo> undo;
@@ -622,119 +870,168 @@ int revert() {
     const QString target = entry.value(QStringLiteral("target")).toString();
     const QString key = entry.value(QStringLiteral("key")).toString();
     const QString last = entry.value(QStringLiteral("last")).toString();
-    std::optional<QString> current = kind.startsWith("labwc-")       ? labwcCurrent(entry)
-                                     : kind == QStringLiteral("gtk") ? iniValue(target, key)
-                                     : kind == QStringLiteral("kde") ? kdeValue(target, key)
-                                                                     : getGSetting(target);
+    const auto current = entryCurrent(entry);
     const QString mode = kind == QStringLiteral("gtk") || kind == QStringLiteral("kde") ? QStringLiteral("relaunch")
                                                                                         : QStringLiteral("live");
     if (current != std::optional<QString>(last)) {
       remaining[iterator.key()] = entry;
-      outputs.append({iterator.key(), QStringLiteral("conflict"), mode,
-                      QStringLiteral("externally modified value was preserved")});
+      outputs.append({
+          .name = iterator.key(),
+          .status = QStringLiteral("conflict"),
+          .mode = mode,
+          .diagnostic = QStringLiteral("externally modified value was preserved"),
+      });
       continue;
     }
     const QJsonValue original_json = entry.value(QStringLiteral("original"));
     const std::optional<QString> original =
         original_json.isNull() ? std::nullopt : std::optional<QString>(original_json.toString());
-    const bool ok = kind.startsWith("labwc-")       ? labwcSet(entry, original)
-                    : kind == QStringLiteral("gtk") ? setIniValue(target, key, original)
-                    : kind == QStringLiteral("kde") ? setKdeValue(target, key, original)
-                                                    : original && setGSetting(target, *original);
-    if (!ok) {
+    const bool written = setEntryValue(entry, original);
+    if (!written) {
       remaining[iterator.key()] = entry;
-      outputs.append(
-          {iterator.key(), QStringLiteral("error"), mode, QStringLiteral("owned output could not be restored")});
+      outputs.append({
+          .name = iterator.key(),
+          .status = QStringLiteral("error"),
+          .mode = mode,
+          .diagnostic = QStringLiteral("owned output could not be restored"),
+      });
       continue;
     }
-    undo.append({kind == "labwc-file"   ? Undo::Kind::File
-                 : kind == "labwc-font" ? Undo::Kind::LabwcFont
-                 : kind == "gtk"        ? Undo::Kind::Gtk
-                 : kind == "kde"        ? Undo::Kind::Kde
-                                        : Undo::Kind::GSettings,
-                 target, key, current});
-    outputs.append({iterator.key(), QStringLiteral("restored"), mode, {}});
+    undo.append({
+        .kind = undoKind(kind),
+        .target = target,
+        .key = key,
+        .value = current,
+    });
+    outputs.append({.name = iterator.key(), .status = QStringLiteral("restored"), .mode = mode, .diagnostic = {}});
   }
   QJsonObject updated{{QStringLiteral("protocol_version"), kProtocolVersion}, {QStringLiteral("entries"), remaining}};
   if (!writeJsonObject(statePath(), updated)) {
     restoreUndo(undo);
     return respond(QStringLiteral("revert"), outputs, true);
   }
-  if (std::any_of(undo.cbegin(), undo.cend(),
-                  [](const Undo &item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; }))
+  if (std::ranges::any_of(
+          undo, [](const Undo& item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; })) {
     reloadLabwc(outputs);
-  const bool error = std::any_of(outputs.cbegin(), outputs.cend(),
-                                 [](const Output &output) { return output.status == QStringLiteral("error"); });
+  }
+  const bool error =
+      std::ranges::any_of(outputs, [](const Output& output) { return output.status == QStringLiteral("error"); });
   return respond(QStringLiteral("revert"), outputs, error);
 }
 
-} // namespace
+}  // namespace
 
-int main(int argc, char *argv[]) { // NOLINT(bugprone-exception-escape)
+int main(int argc, char* argv[]) {  // NOLINT(bugprone-exception-escape)
   QCoreApplication application(argc, argv);
 #ifdef HOLONIGHT_HAVE_KCONFIG
   // ConfigGui registers the QFont codecs used by KConfigGroup at library load time.
   Q_UNUSED(KConfigGui::hasSessionConfig())
 #endif
-  const QStringList arguments = application.arguments();
-  if (arguments.size() < 2)
+  const QStringList arguments = QCoreApplication::arguments();
+  if (arguments.size() < 2) {
     return respond(QStringLiteral("unknown"),
-                   {{QStringLiteral("cli"), QStringLiteral("error"), QStringLiteral("live"),
-                     QStringLiteral("an operation is required")}},
+                   {
+                       {
+                           .name = QStringLiteral("cli"),
+                           .status = QStringLiteral("error"),
+                           .mode = QStringLiteral("live"),
+                           .diagnostic = QStringLiteral("an operation is required"),
+                       },
+                   },
                    true);
-  const QString &operation = arguments[1];
+  }
+  const QString& operation = arguments[1];
   const auto labwc_index = arguments.indexOf("--labwc-config");
   if (labwc_index >= 0) {
-    if (labwc_index + 1 >= arguments.size())
-      return respond(operation, {{"cli", "error", "live", "--labwc-config requires a directory"}}, true);
-    labwcConfig = QDir(arguments[labwc_index + 1]).absolutePath();
+    if (labwc_index + 1 >= arguments.size()) {
+      return respond(
+          operation,
+          {{.name = "cli", .status = "error", .mode = "live", .diagnostic = "--labwc-config requires a directory"}},
+          true);
+    }
+    labwcConfig() = QDir(arguments[labwc_index + 1]).absolutePath();
   }
   QDir().mkpath(QFileInfo(statePath()).absolutePath());
   QLockFile lock(statePath() + ".lock");
-  if (operation != "query" && !lock.tryLock(10000))
-    return respond(operation, {{"state", "error", "live", "adapter state lock is unavailable"}}, true);
-  if (operation != "query" && !recoverLabwc())
-    return respond(operation,
-                   {{"labwc/recovery", "error", "live",
-                     "interrupted labwc update could not be recovered; external changes were preserved"}},
-                   true);
+  if (operation != "query" && !lock.tryLock(10000)) {
+    return respond(
+        operation,
+        {{.name = "state", .status = "error", .mode = "live", .diagnostic = "adapter state lock is unavailable"}},
+        true);
+  }
+  if (operation != "query" && !recoverLabwc()) {
+    return respond(
+        operation,
+        {
+            {
+                .name = "labwc/recovery",
+                .status = "error",
+                .mode = "live",
+                .diagnostic = "interrupted labwc update could not be recovered; external changes were preserved",
+            },
+        },
+        true);
+  }
   if (operation == QStringLiteral("status")) {
     const qsizetype index = arguments.indexOf(QStringLiteral("--appearance"));
-    if (index >= 0 && index + 1 >= arguments.size())
+    if (index >= 0 && index + 1 >= arguments.size()) {
       return respond(operation,
-                     {{QStringLiteral("cli"), QStringLiteral("error"), QStringLiteral("live"),
-                       QStringLiteral("--appearance requires a path")}},
+                     {
+                         {
+                             .name = QStringLiteral("cli"),
+                             .status = QStringLiteral("error"),
+                             .mode = QStringLiteral("live"),
+                             .diagnostic = QStringLiteral("--appearance requires a path"),
+                         },
+                     },
                      true);
+    }
     return status(index < 0 ? std::nullopt : std::optional<QString>(arguments[index + 1]));
   }
-  if (operation == QStringLiteral("revert"))
+  if (operation == QStringLiteral("revert")) {
     return revert();
+  }
   const qsizetype appearance_index = arguments.indexOf(QStringLiteral("--appearance"));
   if (appearance_index < 0 || appearance_index + 1 >= arguments.size()) {
     return respond(operation,
-                   {{QStringLiteral("cli"), QStringLiteral("error"), QStringLiteral("live"),
-                     QStringLiteral("--appearance requires a path")}},
+                   {
+                       {
+                           .name = QStringLiteral("cli"),
+                           .status = QStringLiteral("error"),
+                           .mode = QStringLiteral("live"),
+                           .diagnostic = QStringLiteral("--appearance requires a path"),
+                       },
+                   },
                    true);
   }
-  const QString &appearance = arguments[appearance_index + 1];
-  if (operation == QStringLiteral("apply"))
+  const QString& appearance = arguments[appearance_index + 1];
+  if (operation == QStringLiteral("apply")) {
     return apply(appearance);
+  }
   if (operation == QStringLiteral("query")) {
     const qsizetype field_index = arguments.indexOf(QStringLiteral("--field"));
     QString diagnostic;
     const auto snapshot = loadSnapshot(appearance, &diagnostic);
     if (field_index < 0 || field_index + 1 >= arguments.size() ||
-        arguments[field_index + 1] != QStringLiteral("cursor-theme") || !snapshot)
+        arguments[field_index + 1] != QStringLiteral("cursor-theme") || !snapshot) {
       return 1;
+    }
     QFile standard_output;
-    if (!standard_output.open(stdout, QIODevice::WriteOnly))
+    if (!standard_output.open(stdout, QIODevice::WriteOnly)) {
       return 1;
+    }
     standard_output.write(QByteArray::fromStdString(snapshot->cursor_theme));
     standard_output.write("\n");
     return 0;
   }
-  return respond(
-      operation,
-      {{QStringLiteral("cli"), QStringLiteral("error"), QStringLiteral("live"), QStringLiteral("unknown operation")}},
-      true);
+  return respond(operation,
+                 {
+                     {
+                         .name = QStringLiteral("cli"),
+                         .status = QStringLiteral("error"),
+                         .mode = QStringLiteral("live"),
+                         .diagnostic = QStringLiteral("unknown operation"),
+                     },
+                 },
+                 true);
 }

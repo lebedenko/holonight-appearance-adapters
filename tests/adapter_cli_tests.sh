@@ -81,7 +81,7 @@ printf '%s\n' blocked >"$root/block"
 if env XDG_CONFIG_HOME="$root/rollback" XDG_STATE_HOME="$root/block" GSETTINGS_BACKEND=keyfile \
   "$adapter" apply --appearance "$appearance" --json >"$root/failed.json"; then exit 1; fi
 grep -q '"name":"state","status":"error"' "$root/failed.json"
-if grep -q 'ColorScheme=' "$root/rollback/kdeglobals"; then exit 1; fi
+if [ -e "$root/rollback/kdeglobals" ] && grep -q 'ColorScheme=' "$root/rollback/kdeglobals"; then exit 1; fi
 if grep -q 'gtk-icon-theme-name=' "$root/rollback/gtk-3.0/settings.ini"; then exit 1; fi
 
 env XDG_CONFIG_HOME="$root/config" XDG_STATE_HOME="$root/state" GSETTINGS_BACKEND=keyfile \

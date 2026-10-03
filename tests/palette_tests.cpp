@@ -1,9 +1,8 @@
 #include "holonight/gtk3_palette.h"
 #include "holonight/gtk4_palette.h"
 
-#include <gtest/gtest.h>
-
 #include <array>
+#include <gtest/gtest.h>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -20,7 +19,7 @@ Holonight::Adapters::Snapshot snapshot() {
   return result;
 }
 
-void expectDefinitions(const std::string &css, const Holonight::Adapters::Snapshot &value) {
+void expectDefinitions(const std::string& css, const Holonight::Adapters::Snapshot& value) {
   for (std::size_t index = 0; index < Holonight::Adapters::kColorRoleNames.size(); ++index) {
     const auto color = value.colors[index];
     std::ostringstream encoded;
@@ -34,7 +33,7 @@ void expectDefinitions(const std::string &css, const Holonight::Adapters::Snapsh
   }
 }
 
-void expectPaletteOnly(const std::string &css) {
+void expectPaletteOnly(const std::string& css) {
   constexpr std::array forbidden{"padding",      "margin",    "min-width",   "min-height", "font",
                                  "-gtk-icon-",   "animation", "transition",  "@import",    "url(",
                                  "settings.ini", "gsettings", "environment", "GTK_THEME",  "--"};
@@ -43,7 +42,7 @@ void expectPaletteOnly(const std::string &css) {
   }
 }
 
-} // namespace
+}  // namespace
 
 TEST(GtkPalette, IsDeterministicAndPreservesEveryRoleAndAlpha) {
   const auto value = snapshot();
@@ -70,7 +69,7 @@ TEST(GtkPalette, KeepsMajorSpecificTemplatesDistinctAndPaletteOnly) {
 
 TEST(GtkPalette, MapsTierTwoStatesToTheirExactSemanticRoles) {
   const auto value = snapshot();
-  for (const auto &css :
+  for (const auto& css :
        {Holonight::Adapters::generateGtk3PaletteCss(value), Holonight::Adapters::generateGtk4PaletteCss(value)}) {
     EXPECT_NE(css.find("background-color: @holonight_window_surface"), std::string::npos);
     EXPECT_NE(css.find("background-color: @holonight_strong_selection"), std::string::npos);

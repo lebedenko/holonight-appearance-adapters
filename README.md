@@ -37,3 +37,21 @@ custom configuration directories, recovery, and visual smoke tests.
 
 See [tooling/README.md](tooling/README.md) for presets, local dependency overrides, editor refresh,
 `task tooling:doctor`, and the independent Serena project.
+
+
+## Local CI rehearsal
+
+Run `task ci` with Git, Python 3, Task and an accessible Docker daemon; Podman
+is used when Docker is absent. Immutable linux/amd64 images require an amd64
+host or emulation and network access for registries, canonical provider commits
+and checksum-pinned package archives. Local/hosted CI share the full Debug build,
+palette/CLI/package/isolated GTK tests, format/full tidy and REUSE 6.2.0 licensing.
+The container bootstrap prepares tools, then drops to host UID/GID for all checks.
+
+Tracked edits and non-ignored new inputs enter read-only snapshots; add reported
+new files before pushing. Fresh disposable source/provider/build trees keep
+development builds untouched. Logs, revision/dirty state, tool versions, image
+identities, test evidence and lane results are host-owned beneath ignored
+`build/ci/`. Required failures print complete logs and return nonzero. Run launcher
+regressions with `python3 scripts/ci/test_launcher.py`. No host desktop services,
+installation, publication, releases or uploads occur locally.

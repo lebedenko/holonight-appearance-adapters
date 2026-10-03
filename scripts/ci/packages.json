@@ -1,0 +1,344 @@
+[
+  {
+    "name": "xorg-server-xvfb",
+    "version": "21.1.18-2",
+    "sha256": "90e7983435b52d97fa418a90a0cf3f0ebb8e7fea2c76b9f83309661043f50f27",
+    "url": "https://archive.archlinux.org/packages/x/xorg-server-xvfb/xorg-server-xvfb-21.1.18-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "gdk-pixbuf2",
+    "version": "2.42.12-2",
+    "sha256": "63de2d2a476cd8985bf4962f5693fb46d59288828f2b461c289af4e3b2546138",
+    "url": "https://archive.archlinux.org/packages/g/gdk-pixbuf2/gdk-pixbuf2-2.42.12-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "gtk4",
+    "version": "1:4.18.6-1",
+    "sha256": "d68f422986495c8e7a926cc048e0c9d14e5ef382f40419dd57379107cedf5529",
+    "url": "https://archive.archlinux.org/packages/g/gtk4/gtk4-1:4.18.6-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "librsvg",
+    "version": "2:2.60.0-1",
+    "sha256": "6b0e9ec51cbae3a7baf638459aa277cda12bf01d3d31f9c70f1e14382fff5376",
+    "url": "https://archive.archlinux.org/packages/l/librsvg/librsvg-2:2.60.0-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "gtk3",
+    "version": "1:3.24.52-1",
+    "sha256": "28cab162b5f20621011d5c69112222d0f47ff2f7c99100bb8d35b99a1329aee7",
+    "url": "https://archive.archlinux.org/packages/g/gtk3/gtk3-1:3.24.52-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "python-gobject",
+    "version": "3.56.3-1",
+    "sha256": "291cac7fc55c0e9949848cb3f98ff75a3d2e73520f1f11f4334dff1a3f332b58",
+    "url": "https://archive.archlinux.org/packages/p/python-gobject/python-gobject-3.56.3-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "python-cairo",
+    "version": "1.29.0-2",
+    "sha256": "c5871444426c63db35211c14ef52c78ff3fed55677416eadc04e94c6e81ec6cd",
+    "url": "https://archive.archlinux.org/packages/p/python-cairo/python-cairo-1.29.0-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "gobject-introspection-runtime",
+    "version": "1.86.0-2",
+    "sha256": "68495be23fc8b012e67f6107b415e73b383a99d715d38ab192620a2e380af307",
+    "url": "https://archive.archlinux.org/packages/g/gobject-introspection-runtime/gobject-introspection-runtime-1.86.0-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libgirepository",
+    "version": "1.86.0-2",
+    "sha256": "edf68340a4aab5c4e5a7a2886512367c7ed6ad2be5e1f07ffc6aff07ebb0a1bf",
+    "url": "https://archive.archlinux.org/packages/l/libgirepository/libgirepository-1.86.0-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "pango",
+    "version": "1:1.58.0-1",
+    "sha256": "f74b7c015169be5d5520972e6411798c6b2f2bfdcaca90659d67e4b3ac09e2c3",
+    "url": "https://archive.archlinux.org/packages/p/pango/pango-1:1.58.0-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "cairo",
+    "version": "1.18.4-1",
+    "sha256": "280a524ba7dce88990aace1496abd742b000a7c98a5ec6abd054a4b19f2f4c96",
+    "url": "https://archive.archlinux.org/packages/c/cairo/cairo-1.18.4-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libthai",
+    "version": "0.1.30-1",
+    "sha256": "890798f30ac72d0ca3b59dc5fe8eebe8f923bf09bdb1bc2ec75bc200d7aa70a2",
+    "url": "https://archive.archlinux.org/packages/l/libthai/libthai-0.1.30-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libdatrie",
+    "version": "0.2.14-1",
+    "sha256": "f5ad651ed99afa29d44c662da4f2c6e93764e8a1d47487f41837be1c94ddd38e",
+    "url": "https://archive.archlinux.org/packages/l/libdatrie/libdatrie-0.2.14-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "pixman",
+    "version": "0.46.4-1",
+    "sha256": "e87e665d25a2230a178d8490202e1d677fde5908f68ebedf7d987308fc26fcb6",
+    "url": "https://archive.archlinux.org/packages/p/pixman/pixman-0.46.4-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "fribidi",
+    "version": "1.0.16-2",
+    "sha256": "7146e87f3f68db302ca0e8d507e80f1f9881a05bb00e54bc762c507883c05803",
+    "url": "https://archive.archlinux.org/packages/f/fribidi/fribidi-1.0.16-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libepoxy",
+    "version": "1.5.10-3",
+    "sha256": "6e3f4e026b94d45b044f8c15ef0cc04772eafa892dd8b0bf037b1f865f0aaa33",
+    "url": "https://archive.archlinux.org/packages/l/libepoxy/libepoxy-1.5.10-3-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "at-spi2-core",
+    "version": "2.60.5-1",
+    "sha256": "c079742cb8eb252848cfbbcd3ddb7b926033c2a4abede4cc1c1323d69c5381d6",
+    "url": "https://archive.archlinux.org/packages/a/at-spi2-core/at-spi2-core-2.60.5-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libcloudproviders",
+    "version": "0.4.0-1",
+    "sha256": "1f3c112800499abc69bb2b3520e5d583f88578810d7a2e69a36bceaae993a8cf",
+    "url": "https://archive.archlinux.org/packages/l/libcloudproviders/libcloudproviders-0.4.0-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libcolord",
+    "version": "1.4.8-1",
+    "sha256": "8e440c51060be0f6ea808462a2569f2d9f1dfe454f15723a32bb61f43dc0c286",
+    "url": "https://archive.archlinux.org/packages/l/libcolord/libcolord-1.4.8-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libcups",
+    "version": "2:2.4.19-1",
+    "sha256": "654ab815fe9cff8efd1e8efbcacd52581d753db3d39ad97cc532d2d3a7cb5982",
+    "url": "https://archive.archlinux.org/packages/l/libcups/libcups-2:2.4.19-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "graphene",
+    "version": "1.10.8-2",
+    "sha256": "6965123514a90c62c2ff20077c80000075b4f42f69759a2d84fcf0981b540a21",
+    "url": "https://archive.archlinux.org/packages/g/graphene/graphene-1.10.8-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxcomposite",
+    "version": "0.4.7-1",
+    "sha256": "5d11e648ccccbd7cf19884a677441528d8546eb89a4fda57febb08446e619917",
+    "url": "https://archive.archlinux.org/packages/l/libxcomposite/libxcomposite-0.4.7-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxdamage",
+    "version": "1.1.7-1",
+    "sha256": "36be52372da7f2f49f949fc8a0f3c6e4eaee6fb03761d67e17355bd15ea6cee6",
+    "url": "https://archive.archlinux.org/packages/l/libxdamage/libxdamage-1.1.7-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxinerama",
+    "version": "1.1.6-1",
+    "sha256": "7a91e2e649d9b24946b2b8088c3d7f70fa0673a96d3bae80497f403e57fb7654",
+    "url": "https://archive.archlinux.org/packages/l/libxinerama/libxinerama-1.1.6-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxfont2",
+    "version": "2.0.7-1",
+    "sha256": "24a4fe5ca5baf8511214d74e1a0a1b1c9893c47d02214e279f47ce84d52b905b",
+    "url": "https://archive.archlinux.org/packages/l/libxfont2/libxfont2-2.0.7-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libfontenc",
+    "version": "1.1.9-1",
+    "sha256": "d81a0725b82dd5e89cfd5e65b6502a281cac62c413e1170dc7c571a5f44c42f6",
+    "url": "https://archive.archlinux.org/packages/l/libfontenc/libfontenc-1.1.9-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "xorg-xauth",
+    "version": "1.1.5-1",
+    "sha256": "df9e0d1f29ae0135a49b17157841a4cc7c97869f9f27fd7480fff64f9afb94b7",
+    "url": "https://archive.archlinux.org/packages/x/xorg-xauth/xorg-xauth-1.1.5-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "xorg-xkbcomp",
+    "version": "1.5.0-1",
+    "sha256": "662f4ad50763b9d4192bb4f2bbd81ba3c50630a0ec2a83a13deb8770f785734d",
+    "url": "https://archive.archlinux.org/packages/x/xorg-xkbcomp/xorg-xkbcomp-1.5.0-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "xkeyboard-config",
+    "version": "2.48-1",
+    "sha256": "7f7f8656dbd0b37e36d3a97f6e188fc5c6cbccc4c1e5d34ff35f1d7a79b1cc73",
+    "url": "https://archive.archlinux.org/packages/x/xkeyboard-config/xkeyboard-config-2.48-1-any.pkg.tar.zst"
+  },
+  {
+    "name": "libtiff",
+    "version": "4.7.1-2",
+    "sha256": "0ec04018553ff2a1133fd5c5b5e0360bc214cd0f9c598f5518ba84d133a08b00",
+    "url": "https://archive.archlinux.org/packages/l/libtiff/libtiff-4.7.1-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "jbigkit",
+    "version": "2.1-8",
+    "sha256": "ca53fa884681273162aadcf99c30514a7010d5e621eb0a5ae491500ae8dc52c9",
+    "url": "https://archive.archlinux.org/packages/j/jbigkit/jbigkit-2.1-8-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libdeflate",
+    "version": "1.25-1",
+    "sha256": "4e9b5d01558db0cddfbd2a6a48ed6baf92bbe65af4d0dd1ae390206fe76080ee",
+    "url": "https://archive.archlinux.org/packages/l/libdeflate/libdeflate-1.25-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "shared-mime-info",
+    "version": "2.4-3",
+    "sha256": "7960eab4e923834992c71887b164164dee241e3db5183d4e466aeacd7778336b",
+    "url": "https://archive.archlinux.org/packages/s/shared-mime-info/shared-mime-info-2.4-3-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "dav1d",
+    "version": "1.5.3-1",
+    "sha256": "c781744d4d1a67e250bf0e786379a2f5b6acf318c4439cee93368b3daf5966fc",
+    "url": "https://archive.archlinux.org/packages/d/dav1d/dav1d-1.5.3-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libwebp",
+    "version": "1.6.0-2",
+    "sha256": "a80e7edd3ddd27c6fd8cd83d0bd98d46b3f0279b7ee01f5baeded0d6f26f8975",
+    "url": "https://archive.archlinux.org/packages/l/libwebp/libwebp-1.6.0-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxi",
+    "version": "1.8.3-1",
+    "sha256": "5ac5541f58978a3a5fab08c24f03da43200a7e9b25098e3e6da7bad7a0892cf0",
+    "url": "https://archive.archlinux.org/packages/l/libxi/libxi-1.8.3-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxfixes",
+    "version": "6.0.2-1",
+    "sha256": "d58ab2dbf326e36cf84792fe0dc12c34239ea04ac34159006a566103203db272",
+    "url": "https://archive.archlinux.org/packages/l/libxfixes/libxfixes-6.0.2-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxcursor",
+    "version": "1.2.3-1",
+    "sha256": "2a90267877c2f5ffe6c41a8ef91e6def3b7720de7b4b2628b329373ce20c1b99",
+    "url": "https://archive.archlinux.org/packages/l/libxcursor/libxcursor-1.2.3-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxrandr",
+    "version": "1.5.5-1",
+    "sha256": "49d3a3596311477f8ad2e1735dae612013118802822f21ce22886f65103dd899",
+    "url": "https://archive.archlinux.org/packages/l/libxrandr/libxrandr-1.5.5-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxrender",
+    "version": "0.9.12-1",
+    "sha256": "fed0389073d5b107074eaab48cefcc2716e607865142cde5b579c8ceeefea142",
+    "url": "https://archive.archlinux.org/packages/l/libxrender/libxrender-0.9.12-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "tinysparql",
+    "version": "3.11.1-1",
+    "sha256": "4b6714456212dbc4942abc5bc6be533f2e75547e21783e78278bd1256bac4dce",
+    "url": "https://archive.archlinux.org/packages/t/tinysparql/tinysparql-3.11.1-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libstemmer",
+    "version": "3.1.1-1",
+    "sha256": "d5f9947642735e4f026cf0e382fbec7bb45f3eed3b00b8ba29562cd455746ee8",
+    "url": "https://archive.archlinux.org/packages/l/libstemmer/libstemmer-3.1.1-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "json-glib",
+    "version": "1.10.8-1",
+    "sha256": "3c2ec1b51d45f7c2d0cee7d28520b0772cc6d01fa09b808536e08dca7dd638eb",
+    "url": "https://archive.archlinux.org/packages/j/json-glib/json-glib-1.10.8-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libsoup3",
+    "version": "3.6.6-2",
+    "sha256": "0acbc7244a82d92fb9a143452f60c7d988106d3abed37e7fa770aa3dbb29f3e3",
+    "url": "https://archive.archlinux.org/packages/l/libsoup3/libsoup3-3.6.6-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "dconf",
+    "version": "0.49.0-1",
+    "sha256": "6464869f8fcef78b4908e94c8a37a3eaf6f12be773ebaae6ada4461873ca7fbc",
+    "url": "https://archive.archlinux.org/packages/d/dconf/dconf-0.49.0-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "vulkan-icd-loader",
+    "version": "1.4.350.1-1",
+    "sha256": "e5a8c305ddb66582566d1974bae5f606478608cfe8986cc0ba1d46931d26d1f4",
+    "url": "https://archive.archlinux.org/packages/v/vulkan-icd-loader/vulkan-icd-loader-1.4.350.1-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "lzo",
+    "version": "2.10-5",
+    "sha256": "dd5ec871aea5ddfd38d4a25539e966dc05e75d6969ebc31917c8d25b97ccd69e",
+    "url": "https://archive.archlinux.org/packages/l/lzo/lzo-2.10-5-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxml2-legacy",
+    "version": "2.13.9-2",
+    "sha256": "aac28a52e81422935e3bfa44044030640c5d525ad8f65a9672a3ab7139974652",
+    "url": "https://archive.archlinux.org/packages/l/libxml2-legacy/libxml2-legacy-2.13.9-2-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libunwind",
+    "version": "1.8.2-1",
+    "sha256": "74ba64398637c2dad73f0ed09cee63a83a0f9a67f1484e6fea5a6223ff165d55",
+    "url": "https://archive.archlinux.org/packages/l/libunwind/libunwind-1.8.2-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxmu",
+    "version": "1.3.1-1",
+    "sha256": "31870eb5ad1911880cd7b2f3a59292b644d84b873ed62a1a7c36b9ac26bc08a5",
+    "url": "https://archive.archlinux.org/packages/l/libxmu/libxmu-1.3.1-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "nettle",
+    "version": "3.10.2-1",
+    "sha256": "fa1a132d0d9cd8c58d90605e2b64b63503e89f398912a653ed05abd0f2dd0a3e",
+    "url": "https://archive.archlinux.org/packages/n/nettle/nettle-3.10.2-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxkbfile",
+    "version": "1.2.0-1",
+    "sha256": "78f14e9854c70527975cf2204a6dcbb55473ccda8f4da953b8f15618f167a0f3",
+    "url": "https://archive.archlinux.org/packages/l/libxkbfile/libxkbfile-1.2.0-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxft",
+    "version": "2.3.9-1",
+    "sha256": "a7841ed8e67dc3f94eca4672c8961329dfdd6b67836f8ac720a246d3aab02ecb",
+    "url": "https://archive.archlinux.org/packages/l/libxft/libxft-2.3.9-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "libxtst",
+    "version": "1.2.5-1",
+    "sha256": "7e036fc4ae02ec16d09efed08b111e33d4753aa959d12148461d653659a9f529",
+    "url": "https://archive.archlinux.org/packages/l/libxtst/libxtst-1.2.5-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "kconfig",
+    "version": "6.27.0-1",
+    "sha256": "8d09f731d2749c00372ecee6956d569a315c5fba7b306ffec94347d581bfe956",
+    "url": "https://archive.archlinux.org/packages/k/kconfig/kconfig-6.27.0-1-x86_64.pkg.tar.zst"
+  },
+  {
+    "name": "gsettings-desktop-schemas",
+    "version": "50.1-1",
+    "sha256": "3fbd6449386bfc8c56425a256a0eb5e87d3107b57faf105bbfa246e442eaaaef",
+    "url": "https://archive.archlinux.org/packages/g/gsettings-desktop-schemas/gsettings-desktop-schemas-50.1-1-any.pkg.tar.zst"
+  },
+  {
+    "name": "gsettings-system-schemas",
+    "version": "50.1-1",
+    "sha256": "a3984fe31355827ea1bbf6aa92de0c9257ce310693ffa3dc1395ce29588abf38",
+    "url": "https://archive.archlinux.org/packages/g/gsettings-system-schemas/gsettings-system-schemas-50.1-1-any.pkg.tar.zst"
+  }
+]

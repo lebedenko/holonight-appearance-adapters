@@ -1,0 +1,8 @@
+#!/bin/sh
+# A user-owned file also works after the bootstrap drops privileges.
+set -eu
+log=$(mktemp "$XDG_RUNTIME_DIR/xvfb.XXXXXX")
+result=0
+/work/tools/usr/bin/xvfb-run -e "$log" "$@" || result=$?
+cat "$log"
+exit "$result"

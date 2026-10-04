@@ -28,8 +28,8 @@ GTK-major mappings, compatibility evidence, limitations, and recommendations.
 See [the CTV-101 SDD](docs/sdd/ctv-101-production-adapter/SPEC.md) for the production
 CLI protocol, output ownership, recovery, and fallback contract.
 
-The opt-in [labwc Accent theme](docs/labwc-theme.md) synchronizes colors and title
-fonts when `HoloNight` is selected in `rc.xml`. Installation includes a generated
+The opt-in [labwc Accent theme](docs/labwc-theme.md) synchronizes colors and UI
+fonts for window titles when `HoloNight` is selected in `rc.xml`. Installation includes a generated
 default dark fallback; see the guide for XML enablement, override conflicts,
 custom configuration directories, recovery, and visual smoke tests.
 

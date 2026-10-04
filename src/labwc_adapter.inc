@@ -185,8 +185,8 @@ QMap<QString, QString> labwcExpected(const QString& appearance, QMap<QString, QB
     expected["labwc/file/" + it.key()] = QString::fromUtf8(it.value());
   }
   for (const QString& place : {QStringLiteral("ActiveWindow"), QStringLiteral("InactiveWindow")}) {
-    expected["labwc/font/" + place + "/name"] = resolved.value->title_font;
-    expected["labwc/font/" + place + "/size"] = QString::number(qRound(resolved.value->title_font_size * 96.0 / 72.0));
+    expected["labwc/font/" + place + "/name"] = resolved.value->ui_font;
+    expected["labwc/font/" + place + "/size"] = QString::number(qRound(resolved.value->ui_font_size * 96.0 / 72.0));
   }
   if (filesOut != nullptr) {
     *filesOut = std::move(files);

@@ -1,7 +1,7 @@
 # HoloNight labwc theme
 
 The adapter owns the Accent window-decoration theme and its specialized control
-artwork. Qt supplies the semantic colors and resolved title fonts; this component
+artwork. Qt supplies the semantic colors and resolved UI fonts; this component
 does not maintain a second palette. The Settings page is deferred. Shell's existing
 adapter invocation synchronizes the theme once the user has selected it.
 
@@ -64,7 +64,8 @@ close, menu, shade/unshade, and all-desktops toggles. SVGs use explicit colors,
 semantic error/error-foreground colors; other hover backgrounds use hover surface.
 
 Only `ActiveWindow` and `InactiveWindow` font `name` and `size` values are updated.
-Title points convert to logical pixels at 96 DPI, rounded to the nearest integer
+Both title states follow resolved `ui_font` and `ui_font_size`; decorative title-font
+settings do not affect server-side decorations. UI points convert to logical pixels at 96 DPI, rounded to the nearest integer
 (e.g. 10 pt → 13 px, 18 pt → 24 px). Menu/OSD fonts, font weights/slants, comments,
 and other settings are retained. XML formatting may change.
 
@@ -122,12 +123,12 @@ Optional visual smoke tests require labwc **0.20.2**, GTK3 GI bindings, `grim`, 
 `wlr-randr`, plus permission to create an isolated Wayland socket:
 
 ```sh
-python3 tests/labwc_smoke.py build/holonight-appearance-adapter /tmp/labwc-review
+python3 tests/labwc_smoke.py build/test/holonight-appearance-adapter /tmp/labwc-review
 ```
 
 The harness uses a headless pixman compositor, disposable XDG directories, two GTK
 windows with server-side decorations, and a virtual pointer scoped to that compositor.
-It captures active/inactive, hover, maximize/restore, shade, menu, live scheme/accent
+It captures active/inactive titles, long-title truncation, hover, maximize/restore, shade, menu, live scheme/accent
 reload, and 1×/2× output rendering. Review the PNGs and compositor log; this is not
 part of the default CTest suite. Screenshots from the initial implementation were
 reviewed on labwc 0.20.2 / wlroots 0.20.2 / Qt 6.11.2.

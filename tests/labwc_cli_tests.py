@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory() as temporary:
     config = root / 'custom'
     config.mkdir()
     rc = config / 'rc.xml'
-    original = '<labwc_config><!--keep--><theme><name>HoloNight</name><font place="ActiveWindow"><name>Old</name><size>9</size><weight>bold</weight></font><font place="MenuItem"><name>Menu</name></font></theme><keyboard/></labwc_config>'
+    original = '<labwc_config><!--keep--><theme><name>HoloNight</name><font place="ActiveWindow"><name>Old</name><size>9</size><weight>bold</weight><slant>italic</slant></font><font place="MenuItem"><name>Menu</name></font></theme><keyboard/></labwc_config>'
     rc.write_text(original)
     theme = root / 'data/themes/HoloNight/labwc'
 
@@ -44,20 +44,32 @@ with tempfile.TemporaryDirectory() as temporary:
         assert element.attrib['width'] == '30'
         assert 'currentColor' not in svg.read_text()
     doc = ET.fromstring(rc.read_text())
-    assert doc.find('./theme/font[@place="ActiveWindow"]/size').text == '13'
-    assert doc.find('./theme/font[@place="ActiveWindow"]/name').text == 'Audiowide'
+    assert doc.find('./theme/font[@place="ActiveWindow"]/size').text == '16'
+    assert doc.find('./theme/font[@place="ActiveWindow"]/name').text == 'Inter'
     assert doc.find('./theme/font[@place="ActiveWindow"]/weight').text == 'bold'
+    assert doc.find('./theme/font[@place="ActiveWindow"]/slant').text == 'italic'
+    for place in ['ActiveWindow', 'InactiveWindow']:
+        assert doc.find(f'./theme/font[@place="{place}"]/name').text == 'Inter'
+        assert doc.find(f'./theme/font[@place="{place}"]/size').text == '16'
+    assert doc.find('./theme/font[@place="InactiveWindow"]/weight') is None
+    assert doc.find('./theme/font[@place="InactiveWindow"]/slant') is None
     assert doc.find('./theme/font[@place="MenuItem"]/name').text == 'Menu'
     assert '<!--keep-->' in rc.read_text()
     first = (theme / 'themerc').read_bytes()
     assert run()['labwc/theme']['status'] == 'unchanged'
     assert run('status')['labwc/file/themerc']['status'] == 'applied'
     assert run('status', environment=dict(env, XDG_DATA_HOME=str(root / 'different-data')))['labwc/file/themerc']['status'] == 'conflict'
-    appearance.write_text(fixture.replace('holonight-dark', 'holonight-light').replace('accent = "blue"', 'accent = "violet"').replace('title_size = 10', 'title_size = 18'))
+    appearance.write_text(fixture.replace('title_family = "Audiowide"', 'title_family = "Rajdhani"').replace('title_size = 10', 'title_size = 24'))
+    assert run()['labwc/theme']['status'] == 'unchanged'
+    assert run('status')['labwc/font/ActiveWindow/name']['status'] == 'applied'
+    appearance.write_text(fixture.replace('holonight-dark', 'holonight-light').replace('accent = "blue"', 'accent = "violet"').replace('ui_size = 12', 'ui_size = 18').replace('ui_family = "Inter"', 'ui_family = "DejaVu Sans"'))
     assert run('status')['labwc/file/themerc']['status'] == 'conflict'
     run()
     assert (theme / 'themerc').read_bytes() != first
-    assert ET.fromstring(rc.read_text()).find('./theme/font[@place="InactiveWindow"]/size').text == '24'
+    doc = ET.fromstring(rc.read_text())
+    for place in ['ActiveWindow', 'InactiveWindow']:
+        assert doc.find(f'./theme/font[@place="{place}"]/name').text == 'DejaVu Sans'
+        assert doc.find(f'./theme/font[@place="{place}"]/size').text == '24'
     override = config / 'themerc-override'
     override.write_text('window.*.title.bg.color: #123456\nborder.width: 4\n')
     assert run()['labwc/overrides']['status'] == 'conflict'
@@ -83,7 +95,7 @@ with tempfile.TemporaryDirectory() as temporary:
         results = list(executor.map(lambda _: run(), range(4)))
     assert sum(x['labwc/theme']['status'] == 'applied' for x in results) == 1
     # A changed title font is preserved and blocks a complete labwc update.
-    rc.write_text(rc.read_text().replace('Audiowide', 'External'))
+    rc.write_text(rc.read_text().replace('Inter', 'External'))
     assert run()['labwc/font/ActiveWindow/name']['status'] == 'conflict'
     assert run('revert')['labwc/font/ActiveWindow/name']['status'] == 'conflict'
     assert 'External' in rc.read_text()

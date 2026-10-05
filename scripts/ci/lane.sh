@@ -45,13 +45,18 @@ fetch_provider() {
   git -C "/work/providers/$name" checkout --detach FETCH_HEAD
   [ "$(git -C "/work/providers/$name" rev-parse HEAD)" = "$revision" ]
 }
-fetch_provider holonight-config 5cd36ec9986801c4b831527a38e7b7414b9a1312
-fetch_provider holonight-qt fb0acc6520802d8f9c014bc9042b71b79d8c6d9a
+fetch_provider holonight-config 733781607124fc9bec0820c880e7467d08b34a50
+fetch_provider holonight-qt 98803bca05e16ae0d0784a6cb43b0ace561385de
+fetch_provider holonight-system-services 398804a7cce5a57f9f6870c4e7ec99e9b1f3ddaa
 prefix=/work/providers/prefix
 cmake -S /work/providers/holonight-config -B /work/providers/config-build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 cmake --build /work/providers/config-build --parallel 2
 cmake --install /work/providers/config-build --prefix "$prefix"
+cmake -S /work/providers/holonight-system-services -B /work/providers/services-build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+cmake --build /work/providers/services-build --parallel 2
+cmake --install /work/providers/services-build --prefix "$prefix"
 cmake -S /work/providers/holonight-qt -B /work/providers/qt-build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="$prefix"
 cmake --build /work/providers/qt-build --parallel 2

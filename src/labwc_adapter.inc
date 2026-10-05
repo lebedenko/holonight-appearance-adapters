@@ -170,6 +170,22 @@ void labwcOverrides(const QMap<QString, QByteArray>& files, QList<Output>& outpu
     });
   }
 }
+QMap<QString, QString> labwcExpected(const Holonight::ResolvedAppearance& resolved,
+                                     QMap<QString, QByteArray>* filesOut = nullptr) {
+  auto files = Holonight::Adapters::labwcTheme(Holonight::resolveSemanticAppearance(resolved));
+  QMap<QString, QString> expected;
+  for (auto it = files.begin(); it != files.end(); ++it) {
+    expected["labwc/file/" + it.key()] = QString::fromUtf8(it.value());
+  }
+  for (const QString& place : {QStringLiteral("ActiveWindow"), QStringLiteral("InactiveWindow")}) {
+    expected["labwc/font/" + place + "/name"] = resolved.ui_font;
+    expected["labwc/font/" + place + "/size"] = QString::number(qRound(resolved.ui_font_size * 96.0 / 72.0));
+  }
+  if (filesOut != nullptr) {
+    *filesOut = std::move(files);
+  }
+  return expected;
+}
 QMap<QString, QString> labwcExpected(const QString& appearance, QMap<QString, QByteArray>* filesOut = nullptr) {
   const auto loaded = HoloNight::Config::load(appearance.toStdString());
   if (!loaded || !loaded.value.has_value()) {
@@ -179,20 +195,9 @@ QMap<QString, QString> labwcExpected(const QString& appearance, QMap<QString, QB
   if (!resolved || !resolved.value.has_value()) {
     return {};
   }
-  auto files = Holonight::Adapters::labwcTheme(Holonight::resolveSemanticAppearance(*resolved.value));
-  QMap<QString, QString> expected;
-  for (auto it = files.begin(); it != files.end(); ++it) {
-    expected["labwc/file/" + it.key()] = QString::fromUtf8(it.value());
-  }
-  for (const QString& place : {QStringLiteral("ActiveWindow"), QStringLiteral("InactiveWindow")}) {
-    expected["labwc/font/" + place + "/name"] = resolved.value->ui_font;
-    expected["labwc/font/" + place + "/size"] = QString::number(qRound(resolved.value->ui_font_size * 96.0 / 72.0));
-  }
-  if (filesOut != nullptr) {
-    *filesOut = std::move(files);
-  }
-  return expected;
+  return labwcExpected(*resolved.value, filesOut);
 }
+
 QString labwcRecoveryPath() { return statePath() + ".labwc-recovery.json"; }
 void finishLabwcRecovery() {
   const auto journal = readJsonObject(labwcRecoveryPath());
@@ -362,7 +367,8 @@ bool recordLabwcChanges(const QMap<QString, QString>& expected, const QString& d
   }
   return changed;
 }
-bool applyLabwc(const QString& appearance, QJsonObject& entries, QList<Output>& outputs, QList<Undo>& undo) {
+bool applyLabwc(const Holonight::ResolvedAppearance& appearance, QJsonObject& entries, QList<Output>& outputs,
+                QList<Undo>& undo) {
   if (!labwcSelected(outputs)) {
     return true;
   }

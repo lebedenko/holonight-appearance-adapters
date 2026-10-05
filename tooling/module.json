@@ -9,6 +9,16 @@
   ],
   "dependencies": [
     {
+      "module": "holonight-system-services",
+      "package": "HoloNightSystemServices",
+      "source_variable": "HOLONIGHT_SYSTEM_SERVICES_SOURCE",
+      "options": [
+        "-DBUILD_AUDIO=OFF",
+        "-DBUILD_STORAGE=OFF",
+        "-DBUILD_COMPOSITOR_WAYLAND=OFF"
+      ]
+    },
+    {
       "module": "holonight-config",
       "package": "HoloNightConfig",
       "source_variable": "HOLONIGHT_CONFIG_SOURCE"

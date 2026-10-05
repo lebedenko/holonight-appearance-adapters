@@ -81,6 +81,11 @@ if(BUILD_TESTING)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   add_test(NAME labwc_install_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/labwc_install_tests.py ${CMAKE_CURRENT_BINARY_DIR})
   add_test(NAME labwc_cli_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/labwc_cli_tests.py $<TARGET_FILE:holonight-appearance-adapter>)
+  add_library(change_document_on_rename SHARED tests/change_document_on_rename.cpp)
+  target_link_libraries(change_document_on_rename PRIVATE ${CMAKE_DL_LIBS})
+  add_test(NAME configuration_document_tests COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests/configuration_document_tests.py
+    $<TARGET_FILE:holonight-appearance-adapter> $<TARGET_FILE:change_document_on_rename>)
   find_package(GTest REQUIRED)
   add_executable(consumer_tests tests/consumer_tests.cpp)
   target_link_libraries(consumer_tests PRIVATE holonight_appearance_consumer GTest::gtest_main)

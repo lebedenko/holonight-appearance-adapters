@@ -26,6 +26,7 @@
 
 #include <csignal>
 #include <holonight/config/appearance.h>
+#include <holonight/config/appearance_document.h>
 #include <holonight/config/store.h>
 #include <ranges>
 #include <unistd.h>
@@ -380,8 +381,26 @@ bool setGSetting(const QString& target, const QString& value) {  // NOLINT
   return written;
 }
 
-std::optional<Snapshot> loadSnapshot(const QString& path, QString* diagnostic) {
-  const auto loaded = HoloNight::Config::load(path.toStdString());
+struct CanonicalInput {
+  HoloNight::Config::DocumentSnapshot document;
+  std::filesystem::path target;
+  Holonight::ResolvedAppearance appearance;
+};
+bool canonicalCurrent(const QString& path, const CanonicalInput& input) {
+  const auto target = HoloNight::Config::resolveDocumentTarget(path.toStdString());
+  if (!target || *target.value != input.target) {
+    return false;
+  }
+  const auto current = HoloNight::Config::readDocument(input.target);
+  return current && current.value->revision == input.document.revision;
+}
+std::optional<Snapshot> loadSnapshot(const QString& path, QString* diagnostic, CanonicalInput* input = nullptr) {
+  const auto target = HoloNight::Config::resolveDocumentTarget(path.toStdString());
+  if (!target) {
+    *diagnostic = QStringLiteral("canonical appearance path is unavailable");
+    return std::nullopt;
+  }
+  const auto loaded = HoloNight::Config::readAppearanceDocument(*target.value);
   if (!loaded) {
     *diagnostic = QStringLiteral("canonical appearance is invalid");
     return std::nullopt;
@@ -398,6 +417,13 @@ std::optional<Snapshot> loadSnapshot(const QString& path, QString* diagnostic) {
   if (!parsed) {
     *diagnostic = QStringLiteral("semantic appearance v1 validation failed");
     return std::nullopt;
+  }
+  if (input != nullptr) {
+    *input = {.document = loaded.value->snapshot, .target = *target.value, .appearance = *resolved.value};
+    if (!canonicalCurrent(path, *input)) {
+      *diagnostic = QStringLiteral("canonical appearance changed while loading");
+      return std::nullopt;
+    }
   }
   return parsed.value;
 }
@@ -559,9 +585,31 @@ bool applyKdeSettings(const Snapshot& snapshot, QJsonObject& entries, QList<Outp
   return true;
 }
 
+int sourceChanged(QList<Output>& outputs, QList<Undo>& undo, const std::optional<QJsonObject>& previous_state,
+                  bool state_existed) {
+  restoreUndo(undo);
+  finishLabwcRecovery();
+  if (previous_state && !(state_existed ? writeJsonObject(statePath(), *previous_state) : QFile::remove(statePath()))) {
+    outputs.append({
+        .name = "state",
+        .status = "error",
+        .mode = "live",
+        .diagnostic = "adapter state could not be restored after an external appearance edit",
+    });
+  }
+  outputs.append({
+      .name = "canonical",
+      .status = "error",
+      .mode = "live",
+      .diagnostic = "appearance changed during application; the external document was preserved",
+  });
+  return respond(QStringLiteral("apply"), outputs, true);
+}
+
 int apply(const QString& appearance) {
   QString diagnostic;
-  const auto snapshot = loadSnapshot(appearance, &diagnostic);
+  CanonicalInput input;
+  const auto snapshot = loadSnapshot(appearance, &diagnostic, &input);
   if (!snapshot) {
     return respond(QStringLiteral("apply"),
                    {
@@ -588,6 +636,7 @@ int apply(const QString& appearance) {
                    },
                    true);
   }
+  const bool state_existed = QFileInfo::exists(statePath());
   QJsonObject state = *state_document;
   QJsonObject entries = state.value(QStringLiteral("entries")).toObject();
   QList<Output> outputs;
@@ -604,7 +653,7 @@ int apply(const QString& appearance) {
   if (!applyKdeSettings(*snapshot, entries, outputs, undo)) {
     return respond(QStringLiteral("apply"), outputs, true);
   }
-  if (!applyLabwc(appearance, entries, outputs, undo)) {
+  if (!applyLabwc(input.appearance, entries, outputs, undo)) {
     restoreUndo(undo);
     finishLabwcRecovery();
     outputs.append({
@@ -614,6 +663,9 @@ int apply(const QString& appearance) {
         .diagnostic = "labwc update failed; transaction rolled back",
     });
     return respond("apply", outputs, true);
+  }
+  if (!canonicalCurrent(appearance, input)) {
+    return sourceChanged(outputs, undo, std::nullopt, state_existed);
   }
   state[QStringLiteral("protocol_version")] = kProtocolVersion;
   state[QStringLiteral("entries")] = entries;
@@ -628,10 +680,16 @@ int apply(const QString& appearance) {
     });
     return respond(QStringLiteral("apply"), outputs, true);
   }
+  if (!canonicalCurrent(appearance, input)) {
+    return sourceChanged(outputs, undo, state_document, state_existed);
+  }
   finishLabwcRecovery();
   if (std::ranges::any_of(
           undo, [](const Undo& item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; })) {
     reloadLabwc(outputs);
+  }
+  if (!canonicalCurrent(appearance, input)) {
+    return sourceChanged(outputs, undo, state_document, state_existed);
   }
   outputs.append({
       .name = QStringLiteral("portal"),

@@ -1,5 +1,8 @@
 # Local CI rehearsal
 
+Historical CI-010 acceptance record. Current preparation, provider revisions and
+offline acceptance lanes are defined by [EDM-007](../external-dependency-management/SPEC.md).
+
 Baseline: 4a226b1c3af836dc8a9bd452aace94417384b41e. Umbrella package CI-010.
 
 Preserve the combined build-test/static job and separate licensing job with push/PR

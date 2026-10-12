@@ -39,19 +39,45 @@ See [tooling/README.md](tooling/README.md) for presets, local dependency overrid
 `task tooling:doctor`, and the independent Serena project.
 
 
-## Local CI rehearsal
+## Dependency preparation and local CI
 
-Run `task ci` with Git, Python 3, Task and an accessible Docker daemon; Podman
-is used when Docker is absent. Immutable linux/amd64 images require an amd64
-host or emulation and network access for registries, canonical provider commits
-and checksum-pinned package archives. Local/hosted CI share the full Debug build,
-palette/CLI/package/isolated GTK tests, format/full tidy and REUSE 6.2.0 licensing.
-The container bootstrap prepares tools, then drops to host UID/GID for all checks.
+Production requires Qt >=6.11, JSON-GLib, GIO and KConfig. `BUILD_KCONFIG=OFF`
+preserves KDE-unavailable reporting without discovering or linking KConfig.
+`BUILD_GTK_PROBES` defaults OFF; enabling it requires GTK3 and GTK4 even without
+tests. Tests require installed GTest >=1.14 CONFIG with `gtest` and `gtest_main`,
+without GMock. Probe tests additionally require `xvfb-run` and `dbus-run-session`.
+
+Supply local provider checkouts through `HOLONIGHT_CONFIG_SOURCE`,
+`HOLONIGHT_SYSTEM_SERVICES_SOURCE` and `HOLONIGHT_QT_SOURCE`, then run
+`task deps PRESET=test` explicitly. Ordinary `task configure`, `task build` and
+`task test` validate installed prerequisites and never prepare providers. Internal
+packages resolve from `HOLONIGHT_DEPENDENCY_PREFIX` or `build/deps/prefix`;
+`HOLONIGHT_EXTERNAL_PREFIX` supplies an optional separate external package prefix.
+Incompatible dependency caches are archived by explicit preparation.
+
+Run `task ci:prepare` once with network access and an accessible Docker daemon
+(Podman is used when Docker is absent). It pulls immutable linux/amd64 images,
+acquires exact published provider revisions, and installs providers through
+`task deps` with canonical options and Debug builds. To supply existing checkouts:
+
+```sh
+python3 scripts/ci/run.py --prepare --config-source ../holonight-config \
+  --system-services-source ../holonight-system-services --qt-source ../holonight-qt
+```
+
+Then run `task ci`. All acceptance containers use `--pull=never --network=none`,
+read-only prepared inputs, host UID/GID and isolated runtime directories. Missing
+or incompatible preparation fails; acceptance performs no package acquisition or
+provider builds. Archive `build/ci-prepared` before changing preparation identities.
+
+Five clean lanes cover Full (Debug tests, KConfig and probes ON), Minimal (tests ON,
+KConfig/probes OFF), Release (production defaults and install), Static (full-feature
+compilation database, canonical formatting and strict tidy across all owned units),
+and Licensing (the separate REUSE 6.2.0 image). Select lanes with `--lane full` etc.
 
 Tracked edits and non-ignored new inputs enter read-only snapshots; add reported
-new files before pushing. Fresh disposable source/provider/build trees keep
-development builds untouched. Logs, revision/dirty state, tool versions, image
-identities, test evidence and lane results are host-owned beneath ignored
-`build/ci/`. Required failures print complete logs and return nonzero. Run launcher
-regressions with `python3 scripts/ci/test_launcher.py`. No host desktop services,
-installation, publication, releases or uploads occur locally.
+new files before pushing. Disposable source/build trees leave development builds
+untouched. Complete logs, revision/dirty state and lane results are host-owned under
+ignored `build/ci/`; preparation evidence is under `build/ci-prepared/`. Run focused
+regressions with `python3 scripts/ci/test_launcher.py` and
+`python3 scripts/ci/test_dependencies.py`. GTK probes remain non-installed.

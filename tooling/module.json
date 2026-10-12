@@ -30,5 +30,115 @@
     }
   ],
   "qml_modules": [],
-  "wayland": false
+  "wayland": false,
+  "external_dependencies": [
+    {
+      "id": "qt",
+      "scope": [
+        "build"
+      ],
+      "components": [
+        "Core",
+        "Gui",
+        "Xml"
+      ]
+    },
+    {
+      "id": "gio",
+      "scope": [
+        "build"
+      ]
+    },
+    {
+      "id": "json-glib",
+      "scope": [
+        "build"
+      ]
+    },
+    {
+      "id": "kconfig",
+      "scope": [
+        "build"
+      ],
+      "feature": "BUILD_KCONFIG"
+    },
+    {
+      "id": "gtk3",
+      "scope": [
+        "build"
+      ],
+      "feature": "BUILD_GTK_PROBES"
+    },
+    {
+      "id": "gtk4",
+      "scope": [
+        "build"
+      ],
+      "feature": "BUILD_GTK_PROBES"
+    },
+    {
+      "id": "xvfb",
+      "scope": [
+        "test"
+      ],
+      "feature": "BUILD_GTK_PROBES"
+    },
+    {
+      "id": "dbus",
+      "scope": [
+        "test"
+      ],
+      "feature": "BUILD_GTK_PROBES"
+    },
+    {
+      "id": "compiler",
+      "scope": [
+        "tool"
+      ]
+    },
+    {
+      "id": "cmake",
+      "scope": [
+        "tool"
+      ]
+    },
+    {
+      "id": "ninja",
+      "scope": [
+        "tool"
+      ]
+    },
+    {
+      "id": "pkgconf",
+      "scope": [
+        "tool"
+      ]
+    },
+    {
+      "id": "git",
+      "scope": [
+        "tool"
+      ]
+    },
+    {
+      "id": "python",
+      "scope": [
+        "tool"
+      ]
+    },
+    {
+      "id": "gtest",
+      "scope": [
+        "test"
+      ],
+      "targets": [
+        "GTest::gtest",
+        "GTest::gtest_main"
+      ]
+    }
+  ],
+  "external_features": {
+    "BUILD_KCONFIG": true,
+    "BUILD_GTK_PROBES": false
+  }
 }

@@ -9,7 +9,8 @@ import subprocess
 import sys
 import tempfile
 
-adapter, interposer = sys.argv[1:]
+adapter, interposer, kconfig = sys.argv[1:]
+kconfig = kconfig == "ON"
 with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
     appearance = root / 'appearance.toml'
@@ -33,14 +34,19 @@ with tempfile.TemporaryDirectory() as temporary:
     (labwc / 'rc.xml').write_text('<labwc_config><theme><name>HoloNight</name></theme></labwc_config>')
     original = "# sparse v2\nversion=2\nfuture='preserved'\n[theme]\nscheme='holonight-light'\n"
     appearance.write_text(original)
-    run()
+    result = run()
+    if not kconfig:
+        assert any(item['status'] == 'unavailable' and 'kde' in item['name'] for item in result['outputs'])
+        assert not (root / 'config/kdeglobals').exists()
     assert appearance.read_text() == original
-    assert 'ColorScheme=holonight-light' in (root / 'config/kdeglobals').read_text()
+    if kconfig:
+        assert 'ColorScheme=holonight-light' in (root / 'config/kdeglobals').read_text()
     # Removing the explicit override applies the default without recreating it.
     appearance.write_text("# reset\nversion=2\n")
     run()
     assert appearance.read_text() == "# reset\nversion=2\n"
-    assert 'ColorScheme=holonight-dark' in (root / 'config/kdeglobals').read_text()
+    if kconfig:
+        assert 'ColorScheme=holonight-dark' in (root / 'config/kdeglobals').read_text()
     before = (root / 'config/gtk-3.0/settings.ini').read_bytes()
     for invalid in ["version=9\n", "version=2\n[typography]\nui_size=1\n"]:
         appearance.write_text(invalid)

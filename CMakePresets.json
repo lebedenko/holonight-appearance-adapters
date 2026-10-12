@@ -11,7 +11,6 @@
         "CMAKE_INSTALL_PREFIX": "/usr",
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_PREFIX_PATH": "${sourceDir}/build/deps/prefix",
-        "QML_IMPORT_PATH": "${sourceDir}/build/deps/prefix/lib/qt6/qml",
         "BUILD_TESTING": "OFF"
       }
     },
@@ -25,7 +24,6 @@
         "CMAKE_INSTALL_PREFIX": "/usr",
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_PREFIX_PATH": "${sourceDir}/build/deps/prefix",
-        "QML_IMPORT_PATH": "${sourceDir}/build/deps/prefix/lib/qt6/qml",
         "BUILD_TESTING": "ON"
       }
     },
@@ -39,8 +37,22 @@
         "CMAKE_INSTALL_PREFIX": "/usr",
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_PREFIX_PATH": "${sourceDir}/build/deps/prefix",
-        "QML_IMPORT_PATH": "${sourceDir}/build/deps/prefix/lib/qt6/qml",
         "BUILD_TESTING": "OFF"
+      }
+    },
+    {
+      "name": "minimal",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/minimal",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_INSTALL_PREFIX": "/usr",
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "CMAKE_PREFIX_PATH": "${sourceDir}/build/deps/prefix",
+        "BUILD_TESTING": "ON",
+        "BUILD_KCONFIG": "OFF",
+        "BUILD_GTK_PROBES": "OFF"
       }
     }
   ],
@@ -56,6 +68,10 @@
     {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "minimal",
+      "configurePreset": "minimal"
     }
   ],
   "testPresets": [

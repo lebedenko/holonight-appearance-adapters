@@ -29,6 +29,10 @@ class LauncherTests(unittest.TestCase):
         (self.root / 'executable').chmod(0o755)
         (self.root / 'link').symlink_to('edited')
         (self.root / '.gitignore').write_text('ignored\nbuild/\n')
+        (self.root / 'tooling').mkdir()
+        (self.root / 'tooling/VERSION').write_text('2.0.0')
+        (self.root / 'tooling/module.json').write_text('{}')
+        (self.root / 'CMakePresets.json').write_text('{"configurePresets": [{}, {}]}')
         subprocess.run(['git', '-C', str(self.root), 'add', '.'], check=True)
         subprocess.run(['git', '-C', str(self.root), '-c', 'user.name=Test', '-c', 'user.email=test@example.org',
                         'commit', '-qm', 'fixture'], check=True)
@@ -58,40 +62,48 @@ class LauncherTests(unittest.TestCase):
         scripts = self.root / 'scripts/ci'
         scripts.mkdir(parents=True)
         (scripts / 'images.json').write_text('{"build":"build@sha256:fixture","licensing":"reuse@sha256:fixture"}')
+        prepared = self.root / 'build/ci-prepared'
+        prepared.mkdir(parents=True)
+        (prepared / 'manifest.json').write_text(json.dumps(launcher.preparation_identity({'build': 'build@sha256:fixture'})))
+        (prepared / 'provider-state.json').write_text('{}')
         runtime = Path(self.temporary.name) / 'podman'
         arguments = Path(self.temporary.name) / 'podman-arguments.json'
         runtime.write_text('#!/usr/bin/env python3\nimport json, sys\nfrom pathlib import Path\n'
                            'if sys.argv[1] == "--version": print("fake-podman")\n'
-                           'else:\n'
-                           ' accounts = {}\n'
-                           ' for argument in sys.argv[1:]:\n'
-                           '  if "dst=/etc/passwd," in argument or "dst=/etc/group," in argument:\n'
-                           '   fields = dict(part.split("=", 1) for part in argument.split(",") if "=" in part)\n'
-                           '   assert argument.endswith(",readonly")\n'
-                           '   accounts[fields["dst"]] = Path(fields["src"]).read_text()\n'
-                           '  if "dst=/output" in argument:\n'
-                           '   assert not argument.endswith(",readonly")\n'
-                           '   fields = dict(part.split("=", 1) for part in argument.split(",") if "=" in part)\n'
-                           '   Path(fields["src"], "fixture-artifact").write_text("generated")\n'
-                           f' Path({str(arguments)!r}).write_text(json.dumps([sys.argv[1:], accounts]))\n')
+                           f'else: Path({str(arguments)!r}).write_text(json.dumps(sys.argv[1:]))\n')
         runtime.chmod(0o755)
         with patch.object(launcher.shutil, 'which', side_effect=lambda name: str(runtime) if name == 'podman' else None), \
              patch.object(launcher.os, 'getuid', return_value=1000), \
              patch.object(launcher.os, 'getgid', return_value=1000), \
              patch('sys.argv', ['ci', '--lane', launcher.LANES[0]]):
             self.assertEqual(launcher.main(), 0)
-        command, accounts = json.loads(arguments.read_text())
+        command = json.loads(arguments.read_text())
+        self.assertIn('--pull=never', command)
+        self.assertIn('--network=none', command)
         self.assertIn('--userns=keep-id', command)
-        self.assertEqual(command[command.index('--user') + 1], '0:0')
-        self.assertIn('CI_UID=1000', command)
-        self.assertIn('CI_GID=1000', command)
-        self.assertIn('/input/scripts/ci/bootstrap.sh', command)
+        self.assertEqual(command[command.index('--user') + 1], '1000:1000')
         self.assertTrue(command[command.index('--mount') + 1].endswith(',dst=/input,readonly'))
-        self.assertIn('ci:x:1000:1000:CI:/work/build/home:/bin/sh\n', accounts['/etc/passwd'])
-        self.assertIn('ci:x:1000:\n', accounts['/etc/group'])
-        artifact = next((self.root / 'build/ci').glob('*/artifacts/*/fixture-artifact'))
-        self.assertEqual(artifact.read_text(), 'generated')
-        self.assertEqual(artifact.stat().st_uid, os.getuid())
+
+    def test_preparation_exports_exact_revision_and_repairs_changed_source(self):
+        scripts = self.root / 'scripts/ci'
+        scripts.mkdir(parents=True)
+        (scripts / 'images.json').write_text('{"build":"build@sha256:fixture","licensing":"reuse@sha256:fixture"}')
+        runtime = Path(self.temporary.name) / 'docker'
+        runtime.write_text('#!/bin/sh\nif [ "$1" = --version ]; then echo fake-runtime; fi\nexit 0\n')
+        runtime.chmod(0o755)
+        revision = subprocess.check_output(['git', '-C', str(self.root), 'rev-parse', 'HEAD'], text=True).strip()
+        # Export committed content even when the supplied checkout has edits.
+        (self.root / 'edited').write_text('uncommitted input')
+        with patch.object(launcher.shutil, 'which', return_value=str(runtime)), \
+             patch.object(launcher, 'PROVIDERS', {'config': revision}), \
+             patch('sys.argv', ['ci', '--prepare', '--config-source', str(self.root)]):
+            self.assertEqual(launcher.main(), 0)
+            source = self.root / 'build/ci-prepared/config'
+            self.assertEqual((source / 'edited').read_text(), 'original')
+            (source / 'edited').write_text('corrupted')
+            self.assertEqual(launcher.main(), 0)
+            self.assertEqual((source / 'edited').read_text(), 'original')
+            self.assertEqual((source.with_name('config.previous-1') / 'edited').read_text(), 'corrupted')
 
     def test_missing_runtime_fails_and_records_reason(self):
         with patch.object(launcher.shutil, 'which', return_value=None), patch('sys.argv', ['ci']):
@@ -99,10 +111,36 @@ class LauncherTests(unittest.TestCase):
         result = json.loads(next((self.root / 'build/ci').glob('*/results.json')).read_text())
         self.assertIn('Neither Docker nor Podman', result['error'])
 
+    def test_missing_preparation_fails_without_pulling_or_running(self):
+        scripts = self.root / 'scripts/ci'
+        scripts.mkdir(parents=True)
+        (scripts / 'images.json').write_text('{"build":"build@sha256:fixture","licensing":"reuse@sha256:fixture"}')
+        runtime = Path(self.temporary.name) / 'docker'
+        calls = Path(self.temporary.name) / 'calls'
+        runtime.write_text('#!/usr/bin/env python3\nimport sys\nfrom pathlib import Path\n'
+                           f'with Path({str(calls)!r}).open("a") as out: out.write(sys.argv[1] + "\\n")\n'
+                           'print("fake-runtime")\n')
+        runtime.chmod(0o755)
+        with patch.object(launcher.shutil, 'which', return_value=str(runtime)), patch('sys.argv', ['ci', '--lane', 'full']):
+            self.assertEqual(launcher.main(), 1)
+        self.assertEqual(calls.read_text(), '--version\n')
+        result = json.loads(next((self.root / 'build/ci').glob('*/results.json')).read_text())
+        self.assertIn('task ci:prepare', result['error'])
+        prepared = self.root / 'build/ci-prepared'
+        prepared.mkdir(parents=True)
+        (prepared / 'manifest.json').write_text('{}')
+        with patch.object(launcher.shutil, 'which', return_value=str(runtime)), patch('sys.argv', ['ci', '--lane', 'full']):
+            self.assertEqual(launcher.main(), 1)
+        self.assertEqual(calls.read_text(), '--version\n--version\n')
+
     def test_every_failed_lane_fails_task_and_remaining_lanes_run(self):
         scripts = self.root / 'scripts/ci'
         scripts.mkdir(parents=True)
         (scripts / 'images.json').write_text('{"build":"build@sha256:fixture","licensing":"reuse@sha256:fixture"}')
+        prepared = self.root / 'build/ci-prepared'
+        prepared.mkdir(parents=True)
+        (prepared / 'manifest.json').write_text(json.dumps(launcher.preparation_identity({'build': 'build@sha256:fixture'})))
+        (prepared / 'provider-state.json').write_text('{}')
         runtime = Path(self.temporary.name) / 'docker'
         runtime.write_text('#!/bin/sh\nif [ "$1" = --version ]; then echo fake-runtime; exit 0; fi\nexit 17\n')
         runtime.chmod(0o755)

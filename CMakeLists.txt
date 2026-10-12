@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+option(BUILD_TESTING "Build adapter tests" OFF)
 include(CTest)
 include(GNUInstallDirs)
 install(FILES LICENSE LICENSES/GPL-3.0-or-later.txt
@@ -33,15 +34,18 @@ add_library(holonight_gtk4_palette STATIC src/gtk4_palette.cpp)
 target_include_directories(holonight_gtk4_palette PUBLIC include PRIVATE src)
 target_link_libraries(holonight_gtk4_palette PRIVATE holonight_gtk_palette_common)
 
-set(HOLONIGHT_QT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../holonight-qt/build/tests/package-install-test/destdir/usr" CACHE PATH
-    "Build or install prefix containing HolonightQtConfig.cmake")
-set(HOLONIGHT_CONFIG_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../holonight-config/build/tests/consumer-prefix" CACHE PATH
-    "Build or install prefix containing HoloNightConfigConfig.cmake")
-list(PREPEND CMAKE_PREFIX_PATH "${HOLONIGHT_QT_DIR}" "${HOLONIGHT_CONFIG_DIR}")
 find_package(HolonightQt CONFIG REQUIRED)
 find_package(HoloNightConfig CONFIG REQUIRED)
 find_package(Qt6 6.11 REQUIRED COMPONENTS Core Gui Xml)
-find_package(KF6Config QUIET)
+option(BUILD_KCONFIG "Build KDE configuration integration" ON)
+if(BUILD_KCONFIG)
+  find_package(KF6Config REQUIRED)
+  foreach(_target KF6::ConfigCore KF6::ConfigGui)
+    if(NOT TARGET ${_target})
+      message(FATAL_ERROR "Installed KF6Config lacks ${_target}")
+    endif()
+  endforeach()
+endif()
 
 add_library(holonight_appearance_qt_bridge STATIC src/qt_bridge.cpp)
 target_include_directories(holonight_appearance_qt_bridge PUBLIC include)
@@ -61,13 +65,13 @@ install(FILES docs/labwc-theme.xml docs/labwc-theme.md DESTINATION "${CMAKE_INST
 add_executable(holonight-appearance-adapter src/adapter_main.cpp)
 target_link_libraries(holonight-appearance-adapter PRIVATE holonight_appearance_consumer
   holonight_appearance_qt_bridge HolonightQt::Appearance HoloNight::Config PkgConfig::GIO Qt6::Core Qt6::Xml holonight_labwc_theme)
-if(KF6Config_FOUND AND TARGET KF6::ConfigGui)
+if(BUILD_KCONFIG)
   target_link_libraries(holonight-appearance-adapter PRIVATE KF6::ConfigCore KF6::ConfigGui Qt6::Gui)
   target_compile_definitions(holonight-appearance-adapter PRIVATE HOLONIGHT_HAVE_KCONFIG=1)
 endif()
 install(TARGETS holonight-appearance-adapter RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
-option(BUILD_GTK_PROBES "Build isolated GTK Tier 1 probe binaries" ON)
+option(BUILD_GTK_PROBES "Build isolated GTK Tier 1 probe binaries" OFF)
 if(BUILD_GTK_PROBES)
   pkg_check_modules(GTK3 REQUIRED IMPORTED_TARGET gtk+-3.0)
   pkg_check_modules(GTK4 REQUIRED IMPORTED_TARGET gtk4)
@@ -85,8 +89,13 @@ if(BUILD_TESTING)
   target_link_libraries(change_document_on_rename PRIVATE ${CMAKE_DL_LIBS})
   add_test(NAME configuration_document_tests COMMAND ${Python3_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/tests/configuration_document_tests.py
-    $<TARGET_FILE:holonight-appearance-adapter> $<TARGET_FILE:change_document_on_rename>)
-  find_package(GTest REQUIRED)
+    $<TARGET_FILE:holonight-appearance-adapter> $<TARGET_FILE:change_document_on_rename> $<IF:$<BOOL:${BUILD_KCONFIG}>,ON,OFF>)
+  find_package(GTest 1.14 CONFIG REQUIRED)
+  foreach(_target GTest::gtest GTest::gtest_main)
+    if(NOT TARGET ${_target})
+      message(FATAL_ERROR "Installed GTest lacks ${_target}")
+    endif()
+  endforeach()
   add_executable(consumer_tests tests/consumer_tests.cpp)
   target_link_libraries(consumer_tests PRIVATE holonight_appearance_consumer GTest::gtest_main)
   add_test(NAME consumer_tests COMMAND consumer_tests)
@@ -104,16 +113,14 @@ if(BUILD_TESTING)
   add_test(NAME no_mutations COMMAND ${CMAKE_COMMAND} -P
            ${CMAKE_CURRENT_SOURCE_DIR}/tests/no_mutations.cmake)
   add_test(NAME adapter_cli_tests COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/adapter_cli_tests.sh
-           $<TARGET_FILE:holonight-appearance-adapter>)
+           $<TARGET_FILE:holonight-appearance-adapter> $<IF:$<BOOL:${BUILD_KCONFIG}>,ON,OFF>)
   if(BUILD_GTK_PROBES)
-    find_program(XVFB_RUN xvfb-run)
-    find_program(DBUS_RUN_SESSION dbus-run-session)
-    if(XVFB_RUN AND DBUS_RUN_SESSION)
-      add_test(NAME gtk3_isolated COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_gtk_probe.sh
+    find_program(XVFB_RUN xvfb-run REQUIRED)
+    find_program(DBUS_RUN_SESSION dbus-run-session REQUIRED)
+    add_test(NAME gtk3_isolated COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_gtk_probe.sh
                ${DBUS_RUN_SESSION} ${XVFB_RUN} $<TARGET_FILE:holonight_gtk3_probe>)
-      add_test(NAME gtk4_isolated COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_gtk_probe.sh
+    add_test(NAME gtk4_isolated COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_gtk_probe.sh
                ${DBUS_RUN_SESSION} ${XVFB_RUN} $<TARGET_FILE:holonight_gtk4_probe>)
-    endif()
     add_test(NAME gtk_major_linkage COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_gtk_linkage.sh
              $<TARGET_FILE:holonight_gtk3_probe> $<TARGET_FILE:holonight_gtk4_probe>)
   endif()

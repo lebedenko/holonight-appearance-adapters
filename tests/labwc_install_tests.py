@@ -23,6 +23,7 @@ with tempfile.TemporaryDirectory() as temporary:
         for file in theme.glob('*.svg'):
             ET.parse(file)
         ET.parse(dest / prefix.lstrip('/') / 'share/doc/HoloNightAppearanceAdapters/labwc-theme.xml')
+        assert not any('probe' in str(file) for file in dest.rglob('*'))
         assert not (root / 'config').exists() and not (root / 'data').exists() and not (root / 'state').exists()
         manifest = [Path(line) for line in (build / 'install_manifest.txt').read_text().splitlines()]
         assert len([x for x in manifest if '/themes/HoloNight/labwc/' in str(x)]) == 37

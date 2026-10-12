@@ -13,21 +13,24 @@ Holonight::Adapters::Snapshot snapshot() {
   Holonight::Adapters::Snapshot result;
   result.contract_version = Holonight::Adapters::kContractVersion;
   for (std::size_t index = 0; index < result.colors.size(); ++index) {
-    result.colors[index] = {static_cast<std::uint8_t>(index + 1), static_cast<std::uint8_t>(index + 31),
-                            static_cast<std::uint8_t>(index + 61), static_cast<std::uint8_t>(index + 91)};
+    result.colors.at(index) = {.red = static_cast<std::uint8_t>(index + 1),
+                               .green = static_cast<std::uint8_t>(index + 31),
+                               .blue = static_cast<std::uint8_t>(index + 61),
+                               .alpha = static_cast<std::uint8_t>(index + 91)};
   }
   return result;
 }
 
 void expectDefinitions(const std::string& css, const Holonight::Adapters::Snapshot& value) {
   for (std::size_t index = 0; index < Holonight::Adapters::kColorRoleNames.size(); ++index) {
-    const auto color = value.colors[index];
+    const auto color = value.colors.at(index);
     std::ostringstream encoded;
     encoded << "rgba(" << static_cast<unsigned>(color.red) << ", " << static_cast<unsigned>(color.green) << ", "
             << static_cast<unsigned>(color.blue) << ", " << std::fixed << std::setprecision(6)
             << (static_cast<double>(color.alpha) / 255.0) << ')';
-    const std::string expected = "@define-color holonight_" + std::string(Holonight::Adapters::kColorRoleNames[index]) +
-                                 " " + encoded.str() + ";";
+    const std::string expected = "@define-color holonight_" +
+                                 std::string(Holonight::Adapters::kColorRoleNames.at(index)) + " " + encoded.str() +
+                                 ";";
     EXPECT_NE(css.find(expected), std::string::npos) << expected;
     EXPECT_EQ(css.find(expected), css.rfind(expected)) << expected;
   }

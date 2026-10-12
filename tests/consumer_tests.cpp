@@ -52,8 +52,8 @@ TEST(Consumer, RejectsMalformedColorsSizesAndModes) {
   size.replace(size.find("\":12"), 4, "\":0");
   EXPECT_FALSE(parseSemanticAppearance(size));
   std::string mode = validJson();
-  const auto mode_value = mode.find("\"color_mode\":\"dark\"");
-  mode.replace(mode_value, std::string("\"color_mode\":\"dark\"").size(), "\"color_mode\":\"auto\"");
+  const auto mode_value = mode.find(R"("color_mode":"dark")");
+  mode.replace(mode_value, std::string(R"("color_mode":"dark")").size(), R"("color_mode":"auto")");
   EXPECT_FALSE(parseSemanticAppearance(mode));
 }
 

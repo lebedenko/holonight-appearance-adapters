@@ -11,7 +11,6 @@ include(CTest)
 include(GNUInstallDirs)
 install(FILES LICENSE LICENSES/GPL-3.0-or-later.txt
   DESTINATION "${CMAKE_INSTALL_DATADIR}/licenses/${PROJECT_NAME}")
-include("${CMAKE_CURRENT_SOURCE_DIR}/tooling/dependencies.cmake")
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(JSON_GLIB REQUIRED IMPORTED_TARGET json-glib-1.0)
 pkg_check_modules(GIO REQUIRED IMPORTED_TARGET gio-2.0)
@@ -127,33 +126,16 @@ if(BUILD_TESTING)
 endif()
 
 find_program(CLANG_FORMAT clang-format)
-find_program(CLANG_TIDY clang-tidy)
 file(GLOB_RECURSE FORMAT_FILES CONFIGURE_DEPENDS include/*.h src/*.cpp src/*.inc src/*.h tests/*.cpp probes/*.cpp)
 if(CLANG_FORMAT)
   add_custom_target(format COMMAND ${CLANG_FORMAT} -i ${FORMAT_FILES})
   add_custom_target(format-check COMMAND ${CLANG_FORMAT} --dry-run --Werror ${FORMAT_FILES})
 endif()
-if(CLANG_TIDY)
-  set(TIDY_DB_DIR ${CMAKE_BINARY_DIR}/tidy)
-  file(MAKE_DIRECTORY ${TIDY_DB_DIR})
-  file(WRITE ${CMAKE_BINARY_DIR}/prepare_tidy.cmake
-    "file(READ \"${CMAKE_BINARY_DIR}/compile_commands.json\" db)\n"
-    "string(REPLACE \"-mno-direct-extern-access\" \"\" db \"\${db}\")\n"
-    "file(WRITE \"${TIDY_DB_DIR}/compile_commands.json\" \"\${db}\")\n")
-  add_custom_target(tidy
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_BINARY_DIR}/prepare_tidy.cmake
-    COMMAND ${CLANG_TIDY} -p ${TIDY_DB_DIR}
-    -header-filter "^${CMAKE_CURRENT_SOURCE_DIR}/(include|src)/.*\\.(h|hpp|inc)$"
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/consumer.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/tier1_projection.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/qt_bridge.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/adapter_main.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/labwc_theme.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/labwc_fallback.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk_palette_common.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk3_palette.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/gtk4_palette.cpp
-    VERBATIM)
-endif()
+# Use the same direct compilation-database check as task tidy.
+add_custom_target(tidy
+  COMMAND python3 "${CMAKE_CURRENT_SOURCE_DIR}/scripts/quality.py" tidy --build "${CMAKE_BINARY_DIR}"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  VERBATIM
+)
 
 # Palette and probe targets remain non-installed discovery evidence.

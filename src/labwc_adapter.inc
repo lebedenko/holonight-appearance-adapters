@@ -9,6 +9,10 @@ QString labwcDirectory() {
   if (!labwcConfig().isEmpty()) {
     return labwcConfig();
   }
+  const auto managed = qEnvironmentVariable("HOLONIGHT_LABWC_CONFIG_DIR");
+  if (!managed.isEmpty()) {
+    return managed;
+  }
   QStringList dirs{configHome()};
   dirs += qEnvironmentVariable("XDG_CONFIG_DIRS", "/etc/xdg").split(':', Qt::SkipEmptyParts);
   for (const auto& dir : dirs) {

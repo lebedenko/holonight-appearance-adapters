@@ -17,7 +17,7 @@ with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
     env = dict(os.environ, HOME=str(root), XDG_CONFIG_HOME=str(root / 'config'),
                XDG_DATA_HOME=str(root / 'data'), XDG_STATE_HOME=str(root / 'state'),
-               XDG_CONFIG_DIRS=str(root / 'system'), GSETTINGS_BACKEND='keyfile', LABWC_PID='')
+               XDG_CONFIG_DIRS=str(root / 'system'), GSETTINGS_BACKEND='keyfile', LABWC_PID='', HOLONIGHT_LABWC_CONFIG_DIR=str(root / 'custom'))
     appearance = root / 'appearance.toml'
     fixture = (Path(__file__).with_name('adapter_cli_tests.sh').read_text().split("<<'EOF'\n", 1)[1].split('\nEOF', 1)[0])
     appearance.write_text(fixture)
@@ -29,13 +29,15 @@ with tempfile.TemporaryDirectory() as temporary:
     theme = root / 'data/themes/HoloNight/labwc'
 
     def run(operation='apply', extra=(), check=True, environment=None):
-        result = subprocess.run([adapter, operation, '--appearance', str(appearance), '--labwc-config', str(config), '--json', *extra], env=environment or env, capture_output=True, text=True)
+        result = subprocess.run([adapter, operation, '--appearance', str(appearance), '--json', *extra], env=environment or env, capture_output=True, text=True)
         assert (result.returncode == 0) == check, result.stderr + result.stdout
         value = json.loads(result.stdout)
         assert value['protocol_version'] == 1
         assert all(x['status'] in {'applied', 'unchanged', 'restored', 'unavailable', 'delegated', 'application-owned', 'conflict', 'error'} and x['apply_mode'] in {'live', 'relaunch', 'delegated', 'session-restart'} for x in value['outputs'])
         return {x['name']: x for x in value['outputs']}
 
+    menu = config / 'menu.xml'
+    menu.write_text('<openbox_menu/>')
     result = run()
     assert result['labwc/theme']['status'] == 'applied'
     assert len(list(theme.glob('*.svg'))) == 36
@@ -56,6 +58,7 @@ with tempfile.TemporaryDirectory() as temporary:
     assert doc.find('./theme/font[@place="MenuItem"]/name').text == 'Menu'
     assert '<!--keep-->' in rc.read_text()
     first = (theme / 'themerc').read_bytes()
+    assert menu.read_text() == '<openbox_menu/>'
     assert run()['labwc/theme']['status'] == 'unchanged'
     assert run('status')['labwc/file/themerc']['status'] == 'applied'
     assert run('status', environment=dict(env, XDG_DATA_HOME=str(root / 'different-data')))['labwc/file/themerc']['status'] == 'conflict'
@@ -149,7 +152,7 @@ with tempfile.TemporaryDirectory() as temporary:
     system = root / 'system/labwc'
     system.mkdir(parents=True)
     (system / 'rc.xml').write_text('<labwc_config><theme><name>Other</name></theme></labwc_config>')
-    result = subprocess.run([adapter, 'status', '--json'], env=env, capture_output=True, text=True, check=True)
+    result = subprocess.run([adapter, 'status', '--json'], env=dict(env, HOLONIGHT_LABWC_CONFIG_DIR=''), capture_output=True, text=True, check=True)
     assert 'HoloNight is not selected' in result.stdout
     assert not (root / 'config/labwc/rc.xml').exists()
     # Recover the interruption between the two directory renames, preserving unknown files.
@@ -174,7 +177,7 @@ with tempfile.TemporaryDirectory() as temporary:
     default_rc.parent.mkdir(parents=True)
     default_rc.write_text(original)
     home_env = dict(env, HOME=str(home))
-    for key in ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME']:
+    for key in ['XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'HOLONIGHT_LABWC_CONFIG_DIR']:
         home_env.pop(key)
     # A fallback installed under ~/.local is recognized only when its entire payload is unchanged.
     home_theme = home / '.local/share/themes/HoloNight/labwc'

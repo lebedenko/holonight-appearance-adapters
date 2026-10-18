@@ -40,6 +40,7 @@ precedence, and state filenames follow the [labwc theme manual](https://labwc.gi
 
 For sessions using `labwc -C DIR`, pass `--labwc-config DIR` to `apply`, `status`,
 and `revert`. Otherwise the adapter reads the first `rc.xml` found in
+`HOLONIGHT_LABWC_CONFIG_DIR` when supplied by a managed session, then
 `${XDG_CONFIG_HOME:-~/.config}/labwc` and then the colon-separated
 `${XDG_CONFIG_DIRS:-/etc/xdg}` locations, matching ordinary labwc configuration
 lookup. Put a writable copy of a system `rc.xml` in your user configuration before
@@ -132,3 +133,13 @@ It captures active/inactive titles, long-title truncation, hover, maximize/resto
 reload, and 1×/2× output rendering. Review the PNGs and compositor log; this is not
 part of the default CTest suite. Screenshots from the initial implementation were
 reviewed on labwc 0.20.2 / wlroots 0.20.2 / Qt 6.11.2.
+
+Managed HoloNight sessions expose their persistent selected directory through
+`HOLONIGHT_LABWC_CONFIG_DIR`; explicit `--labwc-config` takes precedence. Settings
+needs no additional arguments. Native rc.xml, menu and theme changes remain visible
+on `labwc --reconfigure`, including atomic replacements. Changing the selected
+entrypoint requires a new login. Existing ownership of another directory produces
+normal conflict guidance; revert against the original directory before switching.
+An installed read-only fallback is not a writable personal configuration: create
+`~/.config/labwc/rc.xml` and log in again to synchronize title fonts. HoloNight theme
+selection remains opt-in.

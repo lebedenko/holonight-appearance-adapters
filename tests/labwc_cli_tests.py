@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory() as temporary:
     config = root / 'custom'
     config.mkdir()
     rc = config / 'rc.xml'
-    original = '<labwc_config><!--keep--><theme><name>HoloNight</name><font place="ActiveWindow"><name>Old</name><size>9</size><weight>bold</weight><slant>italic</slant></font><font place="MenuItem"><name>Menu</name></font></theme><keyboard/><snapping><overlay><enabled>no</enabled></overlay></snapping></labwc_config>'
+    original = '<labwc_config><!--keep--><theme><name>HoloNight</name><font place="ActiveWindow"><name>Old</name><size>9</size><weight>bold</weight><slant>italic</slant></font><font place="MenuItem"><name>Menu</name><weight>bold</weight><slant>italic</slant></font></theme><keyboard/><snapping><overlay><enabled>no</enabled></overlay></snapping></labwc_config>'
     rc.write_text(original)
     theme = root / 'data/themes/HoloNight/labwc'
 
@@ -51,12 +51,13 @@ with tempfile.TemporaryDirectory() as temporary:
     assert doc.find('./theme/font[@place="ActiveWindow"]/name').text == 'Inter'
     assert doc.find('./theme/font[@place="ActiveWindow"]/weight').text == 'bold'
     assert doc.find('./theme/font[@place="ActiveWindow"]/slant').text == 'italic'
-    for place in ['ActiveWindow', 'InactiveWindow']:
+    for place in ['ActiveWindow', 'InactiveWindow', 'MenuItem', 'MenuHeader']:
         assert doc.find(f'./theme/font[@place="{place}"]/name').text == 'Inter'
         assert doc.find(f'./theme/font[@place="{place}"]/size').text == '16'
     assert doc.find('./theme/font[@place="InactiveWindow"]/weight') is None
     assert doc.find('./theme/font[@place="InactiveWindow"]/slant') is None
-    assert doc.find('./theme/font[@place="MenuItem"]/name').text == 'Menu'
+    assert doc.find('./theme/font[@place="MenuItem"]/weight').text == 'bold'
+    assert doc.find('./theme/font[@place="MenuItem"]/slant').text == 'italic'
     assert '<!--keep-->' in rc.read_text()
     first = (theme / 'themerc').read_bytes()
     themed_keys = [f'snapping.overlay.{kind}.{role}.color'
@@ -68,7 +69,9 @@ with tempfile.TemporaryDirectory() as temporary:
     assert all(key in colors(first) for key in themed_keys)
     assert not any('.enabled:' in line for line in first.decode().splitlines())
     assert menu.read_text() == '<openbox_menu/>'
+    applied_xml = rc.read_bytes()
     assert run()['labwc/theme']['status'] == 'unchanged'
+    assert rc.read_bytes() == applied_xml
     assert run('status')['labwc/file/themerc']['status'] == 'applied'
     assert run('status', environment=dict(env, XDG_DATA_HOME=str(root / 'different-data')))['labwc/file/themerc']['status'] == 'conflict'
     appearance.write_text(fixture.replace('title_family = "Audiowide"', 'title_family = "Rajdhani"').replace('title_size = 10', 'title_size = 24'))
@@ -80,7 +83,7 @@ with tempfile.TemporaryDirectory() as temporary:
     regenerated = (theme / 'themerc').read_bytes()
     assert all(colors(regenerated)[key] != colors(first)[key] for key in themed_keys)
     doc = ET.fromstring(rc.read_text())
-    for place in ['ActiveWindow', 'InactiveWindow']:
+    for place in ['ActiveWindow', 'InactiveWindow', 'MenuItem', 'MenuHeader']:
         assert doc.find(f'./theme/font[@place="{place}"]/name').text == 'DejaVu Sans'
         assert doc.find(f'./theme/font[@place="{place}"]/size').text == '24'
     override = config / 'themerc-override'
@@ -109,6 +112,11 @@ with tempfile.TemporaryDirectory() as temporary:
     assert (theme / 'close-active.svg').read_text() == 'external'
     assert not (theme / 'themerc').exists()
     assert ET.fromstring(rc.read_text()).find('./theme/font[@place="ActiveWindow"]/name').text == 'Old'
+    restored = ET.fromstring(rc.read_text())
+    assert restored.find('./theme/font[@place="MenuItem"]/name').text == 'Menu'
+    assert restored.find('./theme/font[@place="MenuItem"]/size') is None
+    assert restored.find('./theme/font[@place="MenuHeader"]') is None
+    assert restored.find('./theme/font[@place="InactiveWindow"]') is None
     # Restore the owned bytes, then complete revert and apply concurrently.
     state = json.loads((root / 'state/holonight/appearance-adapters.json').read_text())
     (theme / 'close-active.svg').write_text(state['entries']['labwc/file/close-active.svg']['last'])
@@ -116,6 +124,18 @@ with tempfile.TemporaryDirectory() as temporary:
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         results = list(executor.map(lambda _: run(), range(4)))
     assert sum(x['labwc/theme']['status'] == 'applied' for x in results) == 1
+    # External menu font edits block apply and survive revert.
+    edited = ET.fromstring(rc.read_text())
+    edited.find('./theme/font[@place="MenuItem"]/size').text = '31'
+    rc.write_text(ET.tostring(edited, encoding='unicode'))
+    assert run()['labwc/font/MenuItem/size']['status'] == 'conflict'
+    assert run('revert')['labwc/font/MenuItem/size']['status'] == 'conflict'
+    assert ET.fromstring(rc.read_text()).find('./theme/font[@place="MenuItem"]/size').text == '31'
+    edited = ET.fromstring(rc.read_text())
+    edited.find('./theme/font[@place="MenuItem"]/size').text = '16'
+    rc.write_text(ET.tostring(edited, encoding='unicode'))
+    run('revert')
+    run()
     # A changed title font is preserved and blocks a complete labwc update.
     rc.write_text(rc.read_text().replace('Inter', 'External'))
     assert run()['labwc/font/ActiveWindow/name']['status'] == 'conflict'

@@ -38,6 +38,14 @@ TEST(LabwcTheme, ExactSemanticColorsAcrossSchemesAndAccents) {
           expectColor(prefix + "bg.color", appearance.subtle_selection);
           expectColor(prefix + "border.color", appearance.accent);
         }
+        expectColor("menu.border.color", appearance.passive_border);
+        expectColor("menu.items.bg.color", appearance.elevated_surface);
+        expectColor("menu.items.text.color", appearance.primary_text);
+        expectColor("menu.items.active.bg.color", appearance.hover_surface);
+        expectColor("menu.items.active.text.color", appearance.primary_text);
+        expectColor("menu.separator.color", appearance.passive_border);
+        expectColor("menu.title.bg.color", appearance.raised_surface);
+        expectColor("menu.title.text.color", appearance.secondary_text);
         EXPECT_FALSE(theme.contains(".enabled:"));
         for (const bool active : {false, true}) {
           for (const bool hover : {false, true}) {
@@ -58,5 +66,15 @@ TEST(LabwcTheme, ExactSemanticColorsAcrossSchemesAndAccents) {
         }
       }
     }
+  }
+}
+
+TEST(LabwcTheme, ExactMenuGeometry) {
+  const auto theme = Holonight::Adapters::labwcTheme({}).value("themerc");
+  for (const auto* line : {"menu.border.width: 1", "menu.width.min: 244", "menu.width.max: 360",
+                           "menu.items.padding.x: 12", "menu.items.padding.y: 6", "menu.separator.width: 1",
+                           "menu.separator.padding.width: 8", "menu.separator.padding.height: 5", "menu.overlap.x: 0",
+                           "menu.overlap.y: 0", "menu.title.text.justify: Left"}) {
+    EXPECT_TRUE(theme.contains(QByteArray(line) + '\n')) << line;
   }
 }

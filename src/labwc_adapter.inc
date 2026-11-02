@@ -181,7 +181,8 @@ QMap<QString, QString> labwcExpected(const Holonight::ResolvedAppearance& resolv
   for (auto it = files.begin(); it != files.end(); ++it) {
     expected["labwc/file/" + it.key()] = QString::fromUtf8(it.value());
   }
-  for (const QString& place : {QStringLiteral("ActiveWindow"), QStringLiteral("InactiveWindow")}) {
+  for (const QString& place : {QStringLiteral("ActiveWindow"), QStringLiteral("InactiveWindow"),
+                               QStringLiteral("MenuItem"), QStringLiteral("MenuHeader")}) {
     expected["labwc/font/" + place + "/name"] = resolved.ui_font;
     expected["labwc/font/" + place + "/size"] = QString::number(qRound(resolved.ui_font_size * 96.0 / 72.0));
   }

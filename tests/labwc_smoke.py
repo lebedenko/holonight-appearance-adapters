@@ -64,6 +64,10 @@ class Pointer:
         self.send(5, 1, struct.pack('IIIII', int(time.monotonic()*1000) & 0xffffffff, x, y, width, height))
         self.send(5, 4)
         time.sleep(.15)
+    def button(self, state):
+        self.send(5, 2, struct.pack('III', int(time.monotonic()*1000) & 0xffffffff, 272, state))
+        self.send(5, 4)
+        time.sleep(.1)
     def click(self):
         for state in [1, 0]:
             self.send(5, 2, struct.pack('III', int(time.monotonic()*1000) & 0xffffffff, 272, state))
@@ -81,13 +85,13 @@ with tempfile.TemporaryDirectory(prefix='holonight-labwc-smoke-') as temporary:
     config = root / 'config/labwc'
     config.mkdir(parents=True)
     env = dict(os.environ, HOME=str(root), XDG_CONFIG_HOME=str(root/'config'), XDG_DATA_HOME=str(root/'data'), XDG_STATE_HOME=str(root/'state'), XDG_RUNTIME_DIR=str(runtime), XDG_CONFIG_DIRS=str(root/'system'), WLR_BACKENDS='headless', WLR_RENDERER='pixman', WLR_SCENE_DISABLE_DIRECT_SCANOUT='1', WLR_HEADLESS_OUTPUTS='1', LABWC_UPDATE_ACTIVATION_ENV='0', GSETTINGS_BACKEND='keyfile', GDK_BACKEND='wayland')
-    for key in ['WAYLAND_DISPLAY', 'DISPLAY', 'LABWC_PID', 'DBUS_SESSION_BUS_ADDRESS']:
+    for key in ['WAYLAND_DISPLAY', 'DISPLAY', 'LABWC_PID', 'DBUS_SESSION_BUS_ADDRESS', 'HOLONIGHT_LABWC_CONFIG_DIR']:
         env.pop(key, None)
     fixture = Path(__file__).with_name('adapter_cli_tests.sh').read_text().split("<<'EOF'\n", 1)[1].split('\nEOF', 1)[0]
     appearance = root / 'appearance.toml'
     appearance.write_text(fixture)
     # Extra controls intentionally included to test all toggle states.
-    (config / 'rc.xml').write_text('''<labwc_config><theme><name>HoloNight</name><titlebar><layout>menu,shade,desk:iconify,max,close</layout></titlebar><dropShadows>yes</dropShadows><cornerRadius>8</cornerRadius><maximizedDecoration>titlebar</maximizedDecoration></theme><windowRules><windowRule title="Inactive*"><action name="MoveTo" x="80" y="100"/></windowRule><windowRule title="Active*"><action name="MoveTo" x="350" y="250"/></windowRule></windowRules></labwc_config>''')
+    (config / 'rc.xml').write_text('''<labwc_config><theme><name>HoloNight</name><titlebar><layout>menu,shade,desk:iconify,max,close</layout></titlebar><dropShadows>yes</dropShadows><cornerRadius>8</cornerRadius><maximizedDecoration>titlebar</maximizedDecoration></theme><desktops><names><name>Main</name><name>A very long workspace name to inspect truncation and submenu width near screen edges</name><name>Review</name></names></desktops><windowRules><windowRule title="Inactive*"><action name="MoveTo" x="80" y="100"/></windowRule><windowRule title="Active*"><action name="MoveTo" x="350" y="250"/></windowRule></windowRules></labwc_config>''')
     subprocess.run([adapter, 'apply', '--appearance', str(appearance), '--json'], env=env, check=True, capture_output=True)
     with (output/'labwc.log').open('w') as log:
         compositor = subprocess.Popen(['labwc', '-C', str(config), '-V'], env=env, stdout=log, stderr=log)
@@ -128,6 +132,13 @@ with tempfile.TemporaryDirectory(prefix='holonight-labwc-smoke-') as temporary:
             pointer.move(106, 118, 1920, 1080)
             pointer.click()
             capture('menu-1x')
+            # Sweep native menu rows so workspace submenu placement and indicators
+            # are captured without depending on translated stock menu labels.
+            def menu_rows(label, x, y, width, height):
+                for row in range(12):
+                    pointer.move(x + 120, min(y + 12 + row * 32, height - 2), width, height)
+                    capture(f'{label}-row-{row:02}')
+            menu_rows('menu-1x', 106, 118, 1920, 1080)
             pointer.move(1000, 700, 1920, 1080)
             pointer.click()
             appearance.write_text(fixture.replace('holonight-dark', 'holonight-light').replace('accent = "blue"', 'accent = "violet"'))
@@ -138,6 +149,34 @@ with tempfile.TemporaryDirectory(prefix='holonight-labwc-smoke-') as temporary:
             subprocess.run(['wlr-randr', '--output', 'HEADLESS-1', '--scale', '2'], env=env, check=True)
             time.sleep(.4)
             capture('light-2x')
+            # Bring the active titlebar menu onto the smaller logical output.
+            pointer.move(106, 118, 960, 540)
+            pointer.click()
+            capture('menu-2x')
+            menu_rows('menu-2x', 106, 118, 960, 540)
+            pointer.move(210, 389, 960, 540)
+            capture('workspace-2x')
+            pointer.move(450, 518, 960, 540)
+            pointer.click()
+            capture('sticky-enabled-2x')
+            pointer.move(106, 118, 960, 540)
+            pointer.click()
+            pointer.move(210, 389, 960, 540)
+            capture('sticky-window-menu-2x')
+            pointer.move(900, 80, 960, 540)
+            pointer.click()
+            pointer.move(170, 118, 960, 540)
+            pointer.click()
+            # Move the window right so the submenu must open towards the left.
+            pointer.move(250, 118, 960, 540)
+            pointer.button(1)
+            pointer.move(260, 118, 960, 540)
+            pointer.move(650, 118, 960, 540)
+            pointer.button(0)
+            pointer.move(506, 118, 960, 540)
+            pointer.click()
+            pointer.move(610, 389, 960, 540)
+            capture('workspace-right-edge-2x')
             pointer.socket.close()
         finally:
             if client:

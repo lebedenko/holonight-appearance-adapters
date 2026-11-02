@@ -49,6 +49,16 @@ QMap<QString, QByteArray> labwcTheme(const SemanticAppearance& appearance) {
     add(prefix + "shadow.size", active ? "48" : "24");
     add(prefix + "shadow.color", active ? "#00000060" : "#00000030");
   }
+  add("menu.border.width", "1");
+  add("menu.width.min", "244");
+  add("menu.width.max", "360");
+  add("menu.items.padding.x", "12");
+  add("menu.items.padding.y", "6");
+  add("menu.separator.width", "1");
+  add("menu.separator.padding.width", "8");
+  add("menu.separator.padding.height", "5");
+  add("menu.overlap.x", "0");
+  add("menu.overlap.y", "0");
   color("menu.border.color", appearance.passive_border);
   color("menu.items.bg.color", appearance.elevated_surface);
   color("menu.items.text.color", appearance.primary_text);

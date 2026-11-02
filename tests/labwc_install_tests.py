@@ -19,6 +19,8 @@ with tempfile.TemporaryDirectory() as temporary:
         theme = dest / prefix.lstrip('/') / 'share/themes/HoloNight/labwc'
         assert (theme / 'themerc').is_file()
         assert 'window.active.title.bg.color: #0c1118ff' in (theme / 'themerc').read_text()
+        assert 'menu.width.min: 244\n' in (theme / 'themerc').read_text()
+        assert 'menu.items.padding.y: 6\n' in (theme / 'themerc').read_text()
         assert len(list(theme.glob('*.svg'))) == 36
         for file in theme.glob('*.svg'):
             ET.parse(file)

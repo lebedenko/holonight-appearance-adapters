@@ -16,7 +16,7 @@ with tempfile.TemporaryDirectory() as temporary:
     appearance = root / 'appearance.toml'
     env = dict(os.environ, HOME=str(root), XDG_CONFIG_HOME=str(root / 'config'),
                XDG_STATE_HOME=str(root / 'state'), XDG_DATA_HOME=str(root / 'data'),
-               XDG_CONFIG_DIRS=str(root / 'system'), GSETTINGS_BACKEND='keyfile', LABWC_PID='')
+               XDG_CONFIG_DIRS=str(root / 'system'), GSETTINGS_BACKEND='keyfile', LABWC_PID='', HOLONIGHT_LABWC_CONFIG_DIR='')
 
     def run(operation='apply', success=True, environment=None):
         result = subprocess.run([adapter, operation, '--appearance', str(appearance), '--json'],

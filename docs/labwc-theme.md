@@ -64,10 +64,10 @@ close, menu, shade/unshade, and all-desktops toggles. SVGs use explicit colors,
 1.5-pixel rounded strokes, and labwc's state-specific filenames. Close hover uses
 semantic error/error-foreground colors; other hover backgrounds use hover surface.
 
-Only `ActiveWindow` and `InactiveWindow` font `name` and `size` values are updated.
-Both title states follow resolved `ui_font` and `ui_font_size`; decorative title-font
+`ActiveWindow`, `InactiveWindow`, `MenuItem` and `MenuHeader` font `name` and
+`size` values are updated. All four places follow resolved `ui_font` and `ui_font_size`; decorative title-font
 settings do not affect server-side decorations. UI points convert to logical pixels at 96 DPI, rounded to the nearest integer
-(e.g. 10 pt → 13 px, 18 pt → 24 px). Menu/OSD fonts, font weights/slants, comments,
+(e.g. 10 pt → 13 px, 18 pt → 24 px). OSD fonts, font weights/slants, comments,
 and other settings are retained. XML formatting may change.
 
 The existing JSON v1 protocol and supported statuses/modes remain unchanged.
@@ -129,8 +129,8 @@ python3 tests/labwc_smoke.py build/test/holonight-appearance-adapter /tmp/labwc-
 
 The harness uses a headless pixman compositor, disposable XDG directories, two GTK
 windows with server-side decorations, and a virtual pointer scoped to that compositor.
-It captures active/inactive titles, long-title truncation, hover, maximize/restore, shade, menu, live scheme/accent
-reload, and 1×/2× output rendering. Review the PNGs and compositor log; this is not
+It captures active/inactive titles, long-title truncation, hover, maximize/restore, shade, native window menus and workspace submenus with long names, live scheme/accent
+reload, sticky workspace indicators, right-edge submenu placement, and 1×/2× output rendering. Review the PNGs and compositor log; this is not
 part of the default CTest suite. Screenshots from the initial implementation were
 reviewed on labwc 0.20.2 / wlroots 0.20.2 / Qt 6.11.2.
 
@@ -149,3 +149,12 @@ Snapping region and edge overlays use the semantic `subtle_selection` background
 selected colors. The adapter does not set overlay enablement keys; compositor defaults
 and user enablement settings continue to apply. These generated colors participate in
 the existing ownership, regeneration, override detection and conservative revert rules.
+
+All native labwc menus share this styling, including the complete stock window menu
+and workspace submenus. Menus use a 1 px border, 244–360 px width, 12 px horizontal /
+6 px vertical item padding, and 1 px separators with 8 px horizontal / 5 px vertical
+padding. Submenu offsets remain zero. Colors follow the semantic scheme and accent.
+Labwc retains its panel, highlight and submenu shapes; these differ from QML menus.
+The custom taskbar menu keeps its four supported actions: stock labwc's current
+protocol cannot expose the complete native window menu through that custom menu.
+No compositor patches, menu contents or shell bindings are changed.

@@ -63,6 +63,12 @@ QMap<QString, QByteArray> labwcTheme(const SemanticAppearance& appearance) {
   color("osd.label.text.color", appearance.primary_text);
   color("osd.window-switcher.style-classic.item.active.bg.color", appearance.subtle_selection);
   color("osd.window-switcher.style-classic.item.active.border.color", appearance.accent);
+  color("osd.window-switcher.style-thumbnail.item.active.bg.color", appearance.subtle_selection);
+  color("osd.window-switcher.style-thumbnail.item.active.border.color", appearance.accent);
+  for (const QString& kind : {QStringLiteral("region"), QStringLiteral("edge")}) {
+    color("snapping.overlay." + kind + ".bg.color", appearance.subtle_selection);
+    color("snapping.overlay." + kind + ".border.color", appearance.accent);
+  }
   files["themerc"] = theme.toUtf8();
   const QMap<QString, QString> paths{
       {"iconify", "M2 11h10"},

@@ -24,7 +24,7 @@ with tempfile.TemporaryDirectory() as temporary:
     config = root / 'custom'
     config.mkdir()
     rc = config / 'rc.xml'
-    original = '<labwc_config><!--keep--><theme><name>HoloNight</name><font place="ActiveWindow"><name>Old</name><size>9</size><weight>bold</weight><slant>italic</slant></font><font place="MenuItem"><name>Menu</name></font></theme><keyboard/></labwc_config>'
+    original = '<labwc_config><!--keep--><theme><name>HoloNight</name><font place="ActiveWindow"><name>Old</name><size>9</size><weight>bold</weight><slant>italic</slant></font><font place="MenuItem"><name>Menu</name></font></theme><keyboard/><snapping><overlay><enabled>no</enabled></overlay></snapping></labwc_config>'
     rc.write_text(original)
     theme = root / 'data/themes/HoloNight/labwc'
 
@@ -46,6 +46,7 @@ with tempfile.TemporaryDirectory() as temporary:
         assert element.attrib['width'] == '30'
         assert 'currentColor' not in svg.read_text()
     doc = ET.fromstring(rc.read_text())
+    assert doc.find('./snapping/overlay/enabled').text == 'no'
     assert doc.find('./theme/font[@place="ActiveWindow"]/size').text == '16'
     assert doc.find('./theme/font[@place="ActiveWindow"]/name').text == 'Inter'
     assert doc.find('./theme/font[@place="ActiveWindow"]/weight').text == 'bold'
@@ -58,6 +59,14 @@ with tempfile.TemporaryDirectory() as temporary:
     assert doc.find('./theme/font[@place="MenuItem"]/name').text == 'Menu'
     assert '<!--keep-->' in rc.read_text()
     first = (theme / 'themerc').read_bytes()
+    themed_keys = [f'snapping.overlay.{kind}.{role}.color'
+                   for kind in ('region', 'edge') for role in ('bg', 'border')]
+    themed_keys += [f'osd.window-switcher.style-thumbnail.item.active.{role}.color'
+                    for role in ('bg', 'border')]
+    def colors(data):
+        return dict(line.split(': ', 1) for line in data.decode().splitlines() if ': ' in line)
+    assert all(key in colors(first) for key in themed_keys)
+    assert not any('.enabled:' in line for line in first.decode().splitlines())
     assert menu.read_text() == '<openbox_menu/>'
     assert run()['labwc/theme']['status'] == 'unchanged'
     assert run('status')['labwc/file/themerc']['status'] == 'applied'
@@ -68,12 +77,22 @@ with tempfile.TemporaryDirectory() as temporary:
     appearance.write_text(fixture.replace('holonight-dark', 'holonight-light').replace('accent = "blue"', 'accent = "violet"').replace('ui_size = 12', 'ui_size = 18').replace('ui_family = "Inter"', 'ui_family = "DejaVu Sans"'))
     assert run('status')['labwc/file/themerc']['status'] == 'conflict'
     run()
-    assert (theme / 'themerc').read_bytes() != first
+    regenerated = (theme / 'themerc').read_bytes()
+    assert all(colors(regenerated)[key] != colors(first)[key] for key in themed_keys)
     doc = ET.fromstring(rc.read_text())
     for place in ['ActiveWindow', 'InactiveWindow']:
         assert doc.find(f'./theme/font[@place="{place}"]/name').text == 'DejaVu Sans'
         assert doc.find(f'./theme/font[@place="{place}"]/size').text == '24'
     override = config / 'themerc-override'
+    enablement = 'snapping.overlay.*.bg.enabled: no\nsnapping.overlay.*.border.enabled: yes\n'
+    override.write_text(enablement)
+    assert 'labwc/overrides' not in run()
+    assert override.read_text() == enablement
+    for key in themed_keys:
+        override.write_text(f'{key}: #12345678\n')
+        assert run()['labwc/overrides']['status'] == 'conflict'
+        assert run('status')['labwc/overrides']['status'] == 'conflict'
+        assert override.read_text() == f'{key}: #12345678\n'
     override.write_text('window.*.title.bg.color: #123456\nborder.width: 4\n')
     assert run()['labwc/overrides']['status'] == 'conflict'
     assert run('status')['labwc/overrides']['status'] == 'conflict'

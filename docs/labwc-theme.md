@@ -143,3 +143,9 @@ normal conflict guidance; revert against the original directory before switching
 An installed read-only fallback is not a writable personal configuration: create
 `~/.config/labwc/rc.xml` and log in again to synchronize title fonts. HoloNight theme
 selection remains opt-in.
+
+Snapping region and edge overlays use the semantic `subtle_selection` background
+(including its alpha) and `accent` border. Classic and thumbnail switchers use the same
+selected colors. The adapter does not set overlay enablement keys; compositor defaults
+and user enablement settings continue to apply. These generated colors participate in
+the existing ownership, regeneration, override detection and conservative revert rules.

@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 import shutil
+import select
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
@@ -40,6 +41,7 @@ with tempfile.TemporaryDirectory() as temporary:
     menu.write_text('<openbox_menu/>')
     result = run()
     assert result['labwc/theme']['status'] == 'applied'
+    assert result['labwc/reload']['status'] == 'unavailable'
     assert len(list(theme.glob('*.svg'))) == 36
     for svg in theme.glob('*.svg'):
         element = ET.fromstring(svg.read_text())
@@ -124,17 +126,51 @@ with tempfile.TemporaryDirectory() as temporary:
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         results = list(executor.map(lambda _: run(), range(4)))
     assert sum(x['labwc/theme']['status'] == 'applied' for x in results) == 1
+    # Successive font changes compare current output to the last write, not the new request.
+    for family, points, pixels in [('DejaVu Sans', 14, '19'), ('Inter', 12, '16')]:
+        appearance.write_text(fixture.replace('ui_size = 12', f'ui_size = {points}').replace('ui_family = "Inter"', f'ui_family = "{family}"'))
+        assert run()['labwc/theme']['status'] == 'applied'
+        doc = ET.fromstring(rc.read_text())
+        assert doc.find('./theme/font[@place="ActiveWindow"]/name').text == family
+        assert doc.find('./theme/font[@place="ActiveWindow"]/size').text == pixels
     # External menu font edits block apply and survive revert.
     edited = ET.fromstring(rc.read_text())
     edited.find('./theme/font[@place="MenuItem"]/size').text = '31'
     rc.write_text(ET.tostring(edited, encoding='unicode'))
-    assert run()['labwc/font/MenuItem/size']['status'] == 'conflict'
+    appearance.write_text(fixture.replace('holonight-dark', 'holonight-mocha').replace('accent = "blue"', 'accent = "violet"'))
+    before_files = {p.name: p.read_bytes() for p in theme.iterdir()}
+    before_xml = rc.read_bytes()
+    conflict = run()['labwc/font/MenuItem/size']
+    assert conflict['status'] == 'conflict'
+    assert all(text in conflict['diagnostic'] for text in ['Whole labwc update skipped', 'MenuItem/size', str(rc), '[16]', '[31]'])
+    assert rc.read_bytes() == before_xml
+    assert {p.name: p.read_bytes() for p in theme.iterdir()} == before_files
+    appearance.write_text(fixture)
     assert run('revert')['labwc/font/MenuItem/size']['status'] == 'conflict'
     assert ET.fromstring(rc.read_text()).find('./theme/font[@place="MenuItem"]/size').text == '31'
     edited = ET.fromstring(rc.read_text())
     edited.find('./theme/font[@place="MenuItem"]/size').text = '16'
     rc.write_text(ET.tostring(edited, encoding='unicode'))
     run('revert')
+    run()
+    # Reconciled output applies the latest colors and reloads exactly once.
+    with subprocess.Popen([sys.argv[2]], stdout=subprocess.PIPE, text=True) as compositor:
+        try:
+            assert compositor.stdout.readline().strip() == 'ready'
+            live_env = dict(env, LABWC_PID=str(compositor.pid))
+            appearance.write_text(fixture.replace('holonight-dark', 'holonight-mocha').replace('accent = "blue"', 'accent = "violet"'))
+            result = run(environment=live_env)
+            assert result['labwc/theme']['status'] == 'applied'
+            assert 'labwc/reload' not in result
+            assert select.select([compositor.stdout], [], [], 2)[0]
+            assert compositor.stdout.readline().strip() == 'reload'
+            assert run(environment=live_env)['labwc/theme']['status'] == 'unchanged'
+            assert not select.select([compositor.stdout], [], [], 0.1)[0]
+            assert (theme / 'themerc').read_bytes() != first
+        finally:
+            compositor.terminate()
+            compositor.wait(timeout=5)
+    appearance.write_text(fixture)
     run()
     # A changed title font is preserved and blocks a complete labwc update.
     rc.write_text(rc.read_text().replace('Inter', 'External'))

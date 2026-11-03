@@ -882,7 +882,13 @@ int status(const std::optional<QString>& appearance) {
                       ? QStringLiteral("applied")
                       : QStringLiteral("conflict"),
         .mode = mode,
-        .diagnostic = statusDiagnostic(disabled, redirected, stale, current.has_value()),
+        .diagnostic = kind.startsWith("labwc-") &&
+                              current != std::optional<QString>(entry.value(QStringLiteral("last")).toString())
+                          ? QStringLiteral("Labwc ownership conflict: field %1 at %2; expected last-written value "
+                                           "[%3], actual [%4]. Whole labwc update will be skipped until reconciled.")
+                                .arg(iterator.key().mid(11), entry["target"].toString(), entry["last"].toString(),
+                                     current.value_or(QStringLiteral("<missing>")))
+                          : statusDiagnostic(disabled, redirected, stale, current.has_value()),
     });
   }
   if (outputs.isEmpty()) {

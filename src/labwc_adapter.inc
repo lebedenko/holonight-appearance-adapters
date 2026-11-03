@@ -294,7 +294,11 @@ bool ownsLabwcOutputs(const QMap<QString, QString>& expected, const QJsonObject&
           .name = it.key(),
           .status = "conflict",
           .mode = "live",
-          .diagnostic = "externally modified or unowned output was preserved",
+          .diagnostic = QStringLiteral("Whole labwc update skipped: field %1 at %2; expected last-written value [%3], "
+                                       "actual [%4]. Reconcile the field before reapplying.")
+                            .arg(it.key().mid(11), isFile ? directory + '/' + it.key().mid(11) : configPath,
+                                 old.isEmpty() ? QStringLiteral("<unowned>") : old["last"].toString(),
+                                 current.value_or(QStringLiteral("<missing>"))),
       });
       return false;
     }
@@ -411,15 +415,29 @@ bool applyLabwc(const Holonight::ResolvedAppearance& appearance, QJsonObject& en
   return true;
 }
 void reloadLabwc(QList<Output>& outputs) {
+  if (!std::ranges::any_of(outputs, [](const Output& output) {
+        return (output.name == "labwc/theme" && output.status == "applied") ||
+               (output.name.startsWith("labwc/") && output.status == "restored");
+      }))
+    return;
+  auto unavailable = [&outputs] {
+    outputs.append(
+        {.name = "labwc/reload",
+         .status = "unavailable",
+         .mode = "live",
+         .diagnostic = "generated assets updated; live compositor reload unavailable (LABWC_PID missing or invalid)"});
+  };
   // LABWC_PID is supplied by labwc to its session children. Validate ownership and executable.
   bool valid = false;
   const auto pid = qEnvironmentVariable("LABWC_PID").toLongLong(&valid);
   if (!valid || pid <= 1) {
+    unavailable();
     return;
   }
   const QString proc = "/proc/" + QString::number(pid);
   if (QFileInfo(proc).ownerId() != static_cast<uint>(getuid()) ||
       QFileInfo(QFile::symLinkTarget(proc + "/exe")).fileName() != "labwc") {
+    unavailable();
     return;
   }
   if (::kill(static_cast<pid_t>(pid), SIGHUP) != 0) {

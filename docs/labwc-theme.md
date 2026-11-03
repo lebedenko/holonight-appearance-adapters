@@ -158,3 +158,11 @@ Labwc retains its panel, highlight and submenu shapes; these differ from QML men
 The custom taskbar menu keeps its four supported actions: stock labwc's current
 protocol cannot expose the complete native window menu through that custom menu.
 No compositor patches, menu contents or shell bindings are changed.
+
+## Recovering a font ownership conflict
+
+A conflict skips the whole labwc update, preserving both generated assets and rc.xml. The diagnostic identifies the XML field, target path, recorded last-written value and current value. Settings shows it in the save result and Integrations. A new desired font is not itself a conflict.
+
+For the observed `ActiveWindow/size` mismatch, ownership records `13` while rc.xml contains `12`; the historical writer is unknown. Back up the labwc configuration and ownership state before editing. In the reported rc.xml target, reconcile only `<font place="ActiveWindow"><size>` to the recorded `13`, keeping unrelated XML unchanged. Review the backup/diff, then use Settings → Integrations → Reapply appearance (or the adapter apply command). The current configured family/size and colors will then be generated, with the existing point-to-pixel conversion. Do not delete ownership state or adopt modified files silently. No host reconciliation is performed automatically.
+
+When generated assets update but a live compositor reload is unavailable, the result reports that explicitly. Reapply from the labwc session with a valid compositor-provided `LABWC_PID`, or reload the compositor manually after reviewing the update.

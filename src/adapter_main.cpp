@@ -55,7 +55,7 @@ struct Output {
 };
 
 struct Undo {
-  enum class Kind : std::uint8_t { Gtk, GSettings, Kde, File, LabwcFont } kind;
+  enum class Kind : std::uint8_t { Gtk, GSettings, Kde, File, LabwcFont, LabwcOverride } kind;
   QString target;
   QString key;
   std::optional<QString> value;
@@ -86,6 +86,9 @@ QJsonObject outputJson(const Output& output) {
   return value;
 }
 
+bool replacePolicy = false;
+QString backupLocation;
+
 int respond(QString operation, const QList<Output>& outputs, bool hard_error = false) {
   bool degraded = false;
   QJsonArray encoded;
@@ -97,6 +100,7 @@ int respond(QString operation, const QList<Output>& outputs, bool hard_error = f
   }
   QString result = QStringLiteral("success");
   if (hard_error) {
+    degraded = false;
     result = QStringLiteral("error");
   } else if (degraded) {
     result = QStringLiteral("degraded");
@@ -108,6 +112,8 @@ int respond(QString operation, const QList<Output>& outputs, bool hard_error = f
       {QStringLiteral("success"), !hard_error},
       {QStringLiteral("degraded"), degraded},
       {QStringLiteral("outputs"), encoded},
+      {QStringLiteral("capabilities"), QJsonArray{"replace-policy"}},
+      {QStringLiteral("backup_location"), backupLocation},
   };
   QFile standard_output;
   if (!standard_output.open(stdout, QIODevice::WriteOnly)) {
@@ -446,22 +452,33 @@ std::optional<QString> originalValue(const QJsonObject& old, const std::optional
   return current;
 }
 
+bool manuallyChanged(const QJsonObject& old, const std::optional<QString>& current) {
+  return !old.isEmpty() && current != std::optional<QString>(old["last"].toString());
+}
+std::optional<QString> baseline(const QJsonObject& old, const std::optional<QString>& current) {
+  return replacePolicy && manuallyChanged(old, current) ? current : originalValue(old, current);
+}
+
 #include "labwc_adapter.inc"
 
-void restoreUndo(const QList<Undo>& undo) {
+bool restoreUndo(const QList<Undo>& undo) {
+  bool restored = true;
   for (const auto& item : std::views::reverse(undo)) {
     if (item.kind == Undo::Kind::File) {
-      setFileValue(item.target, item.value);
+      restored = setFileValue(item.target, item.value) && restored;
+    } else if (item.kind == Undo::Kind::LabwcOverride) {
+      restored = setOverrideValue(item.target, item.value) && restored;
     } else if (item.kind == Undo::Kind::LabwcFont) {
-      setLabwcFontValue(item.target, item.key, item.value);
+      restored = setLabwcFontValue(item.target, item.key, item.value) && restored;
     } else if (item.kind == Undo::Kind::Gtk) {
-      setIniValue(item.target, item.key, item.value);
+      restored = setIniValue(item.target, item.key, item.value) && restored;
     } else if (item.kind == Undo::Kind::Kde) {
-      setKdeValue(item.target, item.key, item.value);
+      restored = setKdeValue(item.target, item.key, item.value) && restored;
     } else if (item.value) {
-      setGSetting(item.target, *item.value);  // NOLINT(bugprone-unchecked-optional-access)
+      restored = setGSetting(item.target, *item.value) && restored;  // NOLINT(bugprone-unchecked-optional-access)
     }
   }
+  return restored;
 }
 
 bool applyGSettings(const Tier1Projection& projection, QJsonObject& entries, QList<Output>& outputs,
@@ -479,6 +496,10 @@ bool applyGSettings(const Tier1Projection& projection, QJsonObject& entries, QLi
       });
       continue;
     }
+    if (!replacePolicy && manuallyChanged(entries.value(target).toObject(), current)) {
+      outputs.append({.name = target, .status = "conflict", .mode = "live", .diagnostic = "custom setting preserved"});
+      continue;
+    }
     if (*current != desired && !setGSetting(target, desired)) {
       restoreUndo(undo);
       outputs.append({
@@ -493,7 +514,7 @@ bool applyGSettings(const Tier1Projection& projection, QJsonObject& entries, QLi
       undo.append({.kind = Undo::Kind::GSettings, .target = target, .key = {}, .value = current});
     }
     const QJsonObject old = entries.value(target).toObject();
-    entries[target] = stateEntry(originalValue(old, current), desired, QStringLiteral("gsettings"), target);
+    entries[target] = stateEntry(baseline(old, current), desired, QStringLiteral("gsettings"), target);
     outputs.append({
         .name = target,
         .status = *current == desired ? QStringLiteral("unchanged") : QStringLiteral("applied"),
@@ -517,6 +538,13 @@ bool applyGtkSettings(const Tier1Projection& projection, QJsonObject& entries, Q
       const QString key = QString::fromStdString(key_value);
       const QString desired = QString::fromStdString(projected);
       const auto current = iniValue(path, key);
+      if (!replacePolicy && manuallyChanged(entries.value(major + u'/' + key).toObject(), current)) {
+        outputs.append({.name = major + u'/' + key,
+                        .status = "conflict",
+                        .mode = "live",
+                        .diagnostic = "custom setting preserved"});
+        continue;
+      }
       if (!setIniValue(path, key, desired)) {
         restoreUndo(undo);
         outputs.append({
@@ -532,7 +560,7 @@ bool applyGtkSettings(const Tier1Projection& projection, QJsonObject& entries, Q
       }
       const QString output_id = major + u'/' + key;
       const QJsonObject old = entries.value(output_id).toObject();
-      entries[output_id] = stateEntry(originalValue(old, current), desired, QStringLiteral("gtk"), path, key);
+      entries[output_id] = stateEntry(baseline(old, current), desired, QStringLiteral("gtk"), path, key);
       outputs.append({
           .name = output_id,
           .status =
@@ -552,6 +580,11 @@ bool applyKdeSettings(const Snapshot& snapshot, QJsonObject& entries, QList<Outp
   for (const auto& [key, desired] : kdeProjection(snapshot)) {
     const QString output_id = QStringLiteral("kde/") + key;
     const auto current = kdeValue(kde_path, key);
+    if (!replacePolicy && manuallyChanged(entries.value(output_id).toObject(), current)) {
+      outputs.append(
+          {.name = output_id, .status = "conflict", .mode = "live", .diagnostic = "custom setting preserved"});
+      continue;
+    }
     if (current != std::optional<QString>(desired) && !setKdeValue(kde_path, key, desired)) {
       restoreUndo(undo);
       outputs.append({
@@ -566,7 +599,7 @@ bool applyKdeSettings(const Snapshot& snapshot, QJsonObject& entries, QList<Outp
       undo.append({.kind = Undo::Kind::Kde, .target = kde_path, .key = key, .value = current});
     }
     const QJsonObject old = entries.value(output_id).toObject();
-    entries[output_id] = stateEntry(originalValue(old, current), desired, QStringLiteral("kde"), kde_path, key);
+    entries[output_id] = stateEntry(baseline(old, current), desired, QStringLiteral("kde"), kde_path, key);
     outputs.append({
         .name = output_id,
         .status = current == std::optional<QString>(desired) ? QStringLiteral("unchanged") : QStringLiteral("applied"),
@@ -587,9 +620,11 @@ bool applyKdeSettings(const Snapshot& snapshot, QJsonObject& entries, QList<Outp
 
 int sourceChanged(QList<Output>& outputs, QList<Undo>& undo, const std::optional<QJsonObject>& previous_state,
                   bool state_existed) {
-  restoreUndo(undo);
-  finishLabwcRecovery();
-  if (previous_state && !(state_existed ? writeJsonObject(statePath(), *previous_state) : QFile::remove(statePath()))) {
+  const bool restored = restoreUndo(undo);
+  const bool stateRestored =
+      !previous_state || (state_existed ? writeJsonObject(statePath(), *previous_state) : QFile::remove(statePath()));
+  if (restored && stateRestored) finishLabwcRecovery();
+  if (!stateRestored) {
     outputs.append({
         .name = "state",
         .status = "error",
@@ -641,6 +676,77 @@ int apply(const QString& appearance) {
   QJsonObject entries = state.value(QStringLiteral("entries")).toObject();
   QList<Output> outputs;
   QList<Undo> undo;
+  for (auto it = entries.begin(); it != entries.end();) {
+    if (!it.value().isObject() || it.value().toObject().isEmpty())
+      it = entries.erase(it);
+    else
+      ++it;
+  }
+  if (replacePolicy) {
+    QTemporaryDir backup(QFileInfo(statePath()).absolutePath() + "/appearance-backup-XXXXXX");
+    if (!backup.isValid())
+      return respond("apply",
+                     {{.name = "backup",
+                       .status = "error",
+                       .mode = "live",
+                       .diagnostic = "Appearance backup failed; no replacement was performed"}},
+                     true);
+    backup.setAutoRemove(false);
+    backupLocation = backup.path();
+    QJsonObject manifest;
+    QJsonObject settings;
+    for (const auto& [target, value] : projection.gsettings) {
+      const auto current = getGSetting(QString::fromStdString(target));
+      settings[QString::fromStdString(target)] = current ? QJsonValue(*current) : QJsonValue(QJsonValue::Null);
+    }
+    if (!writeJsonObject(backup.path() + "/gsettings.json", settings))
+      return respond("apply",
+                     {{.name = "backup",
+                       .status = "error",
+                       .mode = "live",
+                       .diagnostic = "Appearance backup failed; no replacement was performed"}},
+                     true);
+    QStringList paths{statePath(),
+                      configHome() + "/gtk-3.0/settings.ini",
+                      configHome() + "/gtk-4.0/settings.ini",
+                      configHome() + "/kdeglobals",
+                      labwcDirectory() + "/rc.xml",
+                      labwcDirectory() + "/themerc-override"};
+    const auto generated = labwcExpected(input.appearance);
+    for (auto it = generated.begin(); it != generated.end(); ++it) {
+      if (it.key().startsWith("labwc/file/")) paths.append(labwcThemeDirectory() + '/' + it.key().mid(11));
+    }
+    const auto assets = QDir(labwcThemeDirectory()).entryInfoList(QDir::Files | QDir::Hidden);
+    for (const auto& asset : assets) paths.append(asset.filePath());
+    paths.removeDuplicates();
+    int index = 0;
+    for (const auto& path : paths) {
+      const QString name = QString::number(index++);
+      if (QFileInfo(path).isSymLink())
+        return respond("apply",
+                       {{.name = "backup",
+                         .status = "error",
+                         .mode = "live",
+                         .diagnostic = "Appearance backup failed; no replacement was performed"}},
+                       true);
+      const bool exists = QFileInfo::exists(path);
+      manifest[path] = exists ? QJsonValue(name) : QJsonValue(QJsonValue::Null);
+      if (exists && !QFile::copy(path, backup.path() + '/' + name))
+        return respond("apply",
+                       {{.name = "backup",
+                         .status = "error",
+                         .mode = "live",
+                         .diagnostic = "Appearance backup failed; no replacement was performed"}},
+                       true);
+    }
+    if (!writeJsonObject(backup.path() + "/manifest.json", manifest))
+      return respond("apply",
+                     {{.name = "backup",
+                       .status = "error",
+                       .mode = "live",
+                       .diagnostic = "Appearance backup failed; no replacement was performed"}},
+                     true);
+  }
 
   if (!applyGSettings(projection, entries, outputs, undo)) {
     return respond(QStringLiteral("apply"), outputs, true);
@@ -654,8 +760,7 @@ int apply(const QString& appearance) {
     return respond(QStringLiteral("apply"), outputs, true);
   }
   if (!applyLabwc(input.appearance, entries, outputs, undo)) {
-    restoreUndo(undo);
-    finishLabwcRecovery();
+    if (restoreUndo(undo)) finishLabwcRecovery();
     outputs.append({
         .name = "labwc/theme",
         .status = "error",
@@ -669,9 +774,9 @@ int apply(const QString& appearance) {
   }
   state[QStringLiteral("protocol_version")] = kProtocolVersion;
   state[QStringLiteral("entries")] = entries;
+  if (replacePolicy) state["backup_location"] = backupLocation;
   if (!writeJsonObject(statePath(), state)) {
-    restoreUndo(undo);
-    finishLabwcRecovery();
+    if (restoreUndo(undo)) finishLabwcRecovery();
     outputs.append({
         .name = QStringLiteral("state"),
         .status = QStringLiteral("error"),
@@ -684,8 +789,10 @@ int apply(const QString& appearance) {
     return sourceChanged(outputs, undo, state_document, state_existed);
   }
   finishLabwcRecovery();
-  if (std::ranges::any_of(
-          undo, [](const Undo& item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; })) {
+  if (std::ranges::any_of(undo, [](const Undo& item) {
+        return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont ||
+               item.kind == Undo::Kind::LabwcOverride;
+      })) {
     reloadLabwc(outputs);
   }
   if (!canonicalCurrent(appearance, input)) {
@@ -751,6 +858,7 @@ bool setEntryValue(const QJsonObject& entry, const std::optional<QString>& value
 }
 
 Undo::Kind undoKind(const QString& kind) {
+  if (kind == "labwc-override") return Undo::Kind::LabwcOverride;
   if (kind == "labwc-file") {
     return Undo::Kind::File;
   }
@@ -865,6 +973,7 @@ int status(const std::optional<QString>& appearance) {
   const QJsonObject entries = state->value(QStringLiteral("entries")).toObject();
   for (auto iterator = entries.begin(); iterator != entries.end(); ++iterator) {
     const QJsonObject entry = iterator.value().toObject();
+    if (entry.isEmpty()) continue;
     const QString kind = entry.value(QStringLiteral("kind")).toString();
     const auto current = entryCurrent(entry);
     const QString mode = kind == QStringLiteral("gtk") || kind == QStringLiteral("kde") ? QStringLiteral("relaunch")
@@ -930,6 +1039,7 @@ int revert() {
   const QJsonObject entries = state->value(QStringLiteral("entries")).toObject();
   for (auto iterator = entries.begin(); iterator != entries.end(); ++iterator) {
     const QJsonObject entry = iterator.value().toObject();
+    if (entry.isEmpty()) continue;
     const QString kind = entry.value(QStringLiteral("kind")).toString();
     const QString target = entry.value(QStringLiteral("target")).toString();
     const QString key = entry.value(QStringLiteral("key")).toString();
@@ -938,12 +1048,21 @@ int revert() {
     const QString mode = kind == QStringLiteral("gtk") || kind == QStringLiteral("kde") ? QStringLiteral("relaunch")
                                                                                         : QStringLiteral("live");
     if (current != std::optional<QString>(last)) {
-      remaining[iterator.key()] = entry;
+      if (kind == "labwc-override" && current) {
+        undo.append({.kind = Undo::Kind::File, .target = target, .key = {}, .value = fileValue(target)});
+      }
+      if (kind == "labwc-override" && !releaseChangedOverride(entry)) {
+        remaining[iterator.key()] = entry;
+        outputs.append(
+            {.name = iterator.key(), .status = "error", .mode = mode, .diagnostic = "override restore failed"});
+        continue;
+      }
+
       outputs.append({
           .name = iterator.key(),
-          .status = QStringLiteral("conflict"),
+          .status = kind == "labwc-override" && current ? QStringLiteral("restored") : QStringLiteral("unchanged"),
           .mode = mode,
-          .diagnostic = QStringLiteral("externally modified value was preserved"),
+          .diagnostic = QStringLiteral("customization preserved; ownership released"),
       });
       continue;
     }
@@ -969,13 +1088,17 @@ int revert() {
     });
     outputs.append({.name = iterator.key(), .status = QStringLiteral("restored"), .mode = mode, .diagnostic = {}});
   }
-  QJsonObject updated{{QStringLiteral("protocol_version"), kProtocolVersion}, {QStringLiteral("entries"), remaining}};
+  QJsonObject updated{{QStringLiteral("protocol_version"), kProtocolVersion},
+                      {QStringLiteral("entries"), remaining},
+                      {QStringLiteral("backup_location"), state->value("backup_location")}};
   if (!writeJsonObject(statePath(), updated)) {
     restoreUndo(undo);
     return respond(QStringLiteral("revert"), outputs, true);
   }
-  if (std::ranges::any_of(
-          undo, [](const Undo& item) { return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont; })) {
+  if (std::ranges::any_of(undo, [](const Undo& item) {
+        return item.kind == Undo::Kind::File || item.kind == Undo::Kind::LabwcFont ||
+               item.kind == Undo::Kind::LabwcOverride;
+      })) {
     reloadLabwc(outputs);
   }
   const bool error =
@@ -1005,6 +1128,15 @@ int main(int argc, char* argv[]) {  // NOLINT(bugprone-exception-escape)
                    true);
   }
   const QString& operation = arguments[1];
+  if (operation == "capabilities") return respond(operation, {});
+  const auto policyIndex = arguments.indexOf("--policy");
+  if (policyIndex >= 0) {
+    if (operation != "apply" || policyIndex + 1 >= arguments.size() ||
+        (arguments[policyIndex + 1] != "preserve" && arguments[policyIndex + 1] != "replace"))
+      return respond(operation,
+                     {{.name = "cli", .status = "error", .mode = "live", .diagnostic = "invalid apply policy"}}, true);
+    replacePolicy = arguments[policyIndex + 1] == "replace";
+  }
   const auto labwc_index = arguments.indexOf("--labwc-config");
   if (labwc_index >= 0) {
     if (labwc_index + 1 >= arguments.size()) {
@@ -1035,6 +1167,9 @@ int main(int argc, char* argv[]) {  // NOLINT(bugprone-exception-escape)
             },
         },
         true);
+  }
+  if (const auto state = readJsonObject(statePath()); state) {
+    backupLocation = state->value("backup_location").toString();
   }
   if (operation == QStringLiteral("status")) {
     const qsizetype index = arguments.indexOf(QStringLiteral("--appearance"));

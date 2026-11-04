@@ -107,7 +107,7 @@ if [ "$kconfig" = ON ]; then
 fi
 grep -q 'gtk-icon-theme-name=External' "$root/config/gtk-4.0/settings.ini"
 if [ "$kconfig" = ON ]; then
-  grep -q '"name":"kde/General/ColorScheme","status":"conflict"' "$root/conflict.json"
+  grep -q '"name":"kde/General/ColorScheme","status":"unchanged"' "$root/conflict.json"
 fi
 
 if [ "$kconfig" = OFF ]; then cmp "$root/original-kdeglobals" "$root/config/kdeglobals"; fi

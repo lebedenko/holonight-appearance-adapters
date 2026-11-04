@@ -51,3 +51,9 @@ compilation database, canonical formatting and strict tidy across all owned unit
 and Licensing (the separate REUSE 6.2.0 image). Select lanes with `--lane full` etc.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for current native and container commands.
+
+Explicit Settings Save and Reapply use `apply --policy replace`; other callers
+use the default `preserve` policy. Replacement stores durable before-images under
+`$XDG_STATE_HOME/holonight/appearance-backup-*` (default `~/.local/state/holonight`).
+`revert` restores the previous appearance while preserving later manual edits and
+releasing their ownership. See [recoverable appearance](docs/sdd/recoverable-appearance/DESIGN.md).

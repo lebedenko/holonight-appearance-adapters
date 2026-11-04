@@ -92,7 +92,8 @@ with tempfile.TemporaryDirectory(prefix='holonight-labwc-smoke-') as temporary:
     appearance.write_text(fixture)
     # Extra controls intentionally included to test all toggle states.
     (config / 'rc.xml').write_text('''<labwc_config><theme><name>HoloNight</name><titlebar><layout>menu,shade,desk:iconify,max,close</layout></titlebar><dropShadows>yes</dropShadows><cornerRadius>8</cornerRadius><maximizedDecoration>titlebar</maximizedDecoration></theme><desktops><names><name>Main</name><name>A very long workspace name to inspect truncation and submenu width near screen edges</name><name>Review</name></names></desktops><windowRules><windowRule title="Inactive*"><action name="MoveTo" x="80" y="100"/></windowRule><windowRule title="Active*"><action name="MoveTo" x="350" y="250"/></windowRule></windowRules></labwc_config>''')
-    subprocess.run([adapter, 'apply', '--appearance', str(appearance), '--json'], env=env, check=True, capture_output=True)
+    (config / 'themerc-override').write_text('window.*.title.bg.color: #ff0000\nwindow.active.title.bg.color: #00ff00\nmenu.overlap.x: 17\n')
+    subprocess.run([adapter, 'apply', '--policy', 'replace', '--appearance', str(appearance), '--json'], env=env, check=True, capture_output=True)
     with (output/'labwc.log').open('w') as log:
         compositor = subprocess.Popen(['labwc', '-C', str(config), '-V'], env=env, stdout=log, stderr=log)
         client = None
@@ -113,6 +114,16 @@ with tempfile.TemporaryDirectory(prefix='holonight-labwc-smoke-') as temporary:
                 time.sleep(.3)
                 subprocess.run(['grim', str(output/(name+'.png'))], env=env, check=True)
             capture('dark-1x')
+            from PIL import Image
+            def title_color():
+                theme = (root / 'data/themes/HoloNight/labwc/themerc').read_text()
+                return next(line.split(': ', 1)[1][:7] for line in theme.splitlines() if line.startswith('window.active.title.bg.color:'))
+            def verify_title(name):
+                rgb = tuple(bytes.fromhex(title_color()[1:]))
+                picture = Image.open(output / (name + '.png')).convert('RGB')
+                # Interior titlebar pixels away from text, controls and rounded corners.
+                assert picture.getpixel((600, 255)) == rgb, (name, picture.getpixel((600, 255)), rgb)
+            verify_title('dark-1x')
             # MoveTo positions the outer decoration; active titlebar starts at (350,250).
             pointer.move(746, 268, 1920, 1080)
             capture('close-hover-1x')
@@ -146,6 +157,8 @@ with tempfile.TemporaryDirectory(prefix='holonight-labwc-smoke-') as temporary:
             (output/'reload-response.json').write_text(response.stdout)
             time.sleep(.3)
             capture('light-reloaded-1x')
+            verify_title('light-reloaded-1x')
+            assert 'menu.overlap.x: 17' in (config / 'themerc-override').read_text()
             subprocess.run(['wlr-randr', '--output', 'HEADLESS-1', '--scale', '2'], env=env, check=True)
             time.sleep(.4)
             capture('light-2x')

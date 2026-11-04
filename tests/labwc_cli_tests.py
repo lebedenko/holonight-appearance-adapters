@@ -110,7 +110,7 @@ with tempfile.TemporaryDirectory() as temporary:
     run()
     (theme / 'close-active.svg').write_text('external')
     assert run()['labwc/file/close-active.svg']['status'] == 'conflict'
-    assert run('revert')['labwc/file/close-active.svg']['status'] == 'conflict'
+    assert run('revert')['labwc/file/close-active.svg']['status'] == 'unchanged'
     assert (theme / 'close-active.svg').read_text() == 'external'
     assert not (theme / 'themerc').exists()
     assert ET.fromstring(rc.read_text()).find('./theme/font[@place="ActiveWindow"]/name').text == 'Old'
@@ -121,7 +121,8 @@ with tempfile.TemporaryDirectory() as temporary:
     assert restored.find('./theme/font[@place="InactiveWindow"]') is None
     # Restore the owned bytes, then complete revert and apply concurrently.
     state = json.loads((root / 'state/holonight/appearance-adapters.json').read_text())
-    (theme / 'close-active.svg').write_text(state['entries']['labwc/file/close-active.svg']['last'])
+    assert 'labwc/file/close-active.svg' not in state['entries']
+    (theme / 'close-active.svg').unlink()
     run('revert')
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         results = list(executor.map(lambda _: run(), range(4)))
@@ -142,11 +143,11 @@ with tempfile.TemporaryDirectory() as temporary:
     before_xml = rc.read_bytes()
     conflict = run()['labwc/font/MenuItem/size']
     assert conflict['status'] == 'conflict'
-    assert all(text in conflict['diagnostic'] for text in ['Whole labwc update skipped', 'MenuItem/size', str(rc), '[16]', '[31]'])
-    assert rc.read_bytes() == before_xml
-    assert {p.name: p.read_bytes() for p in theme.iterdir()} == before_files
+    assert 'custom font preserved' in conflict['diagnostic']
+    assert ET.fromstring(rc.read_text()).find('./theme/font[@place="MenuItem"]/size').text == '31'
+    assert {p.name: p.read_bytes() for p in theme.iterdir()} != before_files
     appearance.write_text(fixture)
-    assert run('revert')['labwc/font/MenuItem/size']['status'] == 'conflict'
+    assert run('revert')['labwc/font/MenuItem/size']['status'] == 'unchanged'
     assert ET.fromstring(rc.read_text()).find('./theme/font[@place="MenuItem"]/size').text == '31'
     edited = ET.fromstring(rc.read_text())
     edited.find('./theme/font[@place="MenuItem"]/size').text = '16'
@@ -175,11 +176,11 @@ with tempfile.TemporaryDirectory() as temporary:
     # A changed title font is preserved and blocks a complete labwc update.
     rc.write_text(rc.read_text().replace('Inter', 'External'))
     assert run()['labwc/font/ActiveWindow/name']['status'] == 'conflict'
-    assert run('revert')['labwc/font/ActiveWindow/name']['status'] == 'conflict'
+    assert run('revert')['labwc/font/ActiveWindow/name']['status'] == 'unchanged'
     assert 'External' in rc.read_text()
     # Malformed XML does not prevent other adapter outputs from working.
     rc.write_text('<broken')
-    assert run()['labwc/selection']['status'] == 'conflict'
+    assert run(check=False)['labwc/selection']['status'] == 'conflict'
     assert rc.read_text() == '<broken'
     # Unowned generated paths are never adopted automatically.
     rc.write_text(original)
@@ -223,6 +224,14 @@ with tempfile.TemporaryDirectory() as temporary:
     target.write_text('external')
     assert run('status', check=False, environment=recovery_env)['labwc/recovery']['status'] == 'error'
     assert target.read_text() == 'external' and journal.exists()
+    # Interrupted override writes roll back only the tracked block.
+    journal.unlink()
+    block = '# BEGIN HoloNight appearance\nwindow.active.title.bg.color: #123456\n# END HoloNight appearance\n'
+    override.write_text('unrelated: keep\n' + block)
+    override_entry = {'kind': 'labwc-override', 'target': str(override), 'last': block, 'original': None}
+    journal.write_text(json.dumps({'entries': {'labwc/overrides/appearance': override_entry}, 'before': {'labwc/overrides/appearance': override_entry}}))
+    run('status', environment=recovery_env)
+    assert override.read_text() == 'unrelated: keep\n' and not journal.exists()
     # Standard XDG search can select a system rc.xml, without creating user rc.xml.
     system = root / 'system/labwc'
     system.mkdir(parents=True)
@@ -262,4 +271,76 @@ with tempfile.TemporaryDirectory() as temporary:
     assert (home / '.local/share/themes/HoloNight/labwc/themerc').exists()
     subprocess.run([adapter, 'revert', '--json'], env=home_env, check=True, capture_output=True)
     assert (home_theme / 'themerc').read_bytes() == fallback_bytes
+    # Explicit replacement recovers stale/deleted fields and assets without changing unrelated XML.
+    rc.write_text(original)
+    env = dict(env, XDG_DATA_HOME=str(root / 'replacement-data'), XDG_STATE_HOME=str(root / 'replacement-state'))
+    theme = root / 'replacement-data/themes/HoloNight/labwc'
+    appearance.write_text(fixture)
+    run()
+    edited = ET.fromstring(rc.read_text())
+    active = edited.find('./theme/font[@place="ActiveWindow"]')
+    active.remove(active.find('size'))
+    rc.write_text(ET.tostring(edited, encoding='unicode'))
+    (theme / 'close-active.svg').write_text('manual asset')
+    (theme / 'max-active.svg').unlink()
+    (theme / 'extra.txt').write_text('keep extra')
+    override.write_text('window.*.title.bg.color: #123456\nborder.color: #abcdef\nmenu.items.font: custom\n')
+    state_path = root / 'replacement-state/holonight/appearance-adapters.json'
+    state = json.loads(state_path.read_text())
+    state['entries']['legacy/null'] = None
+    state_path.write_text(json.dumps(state))
+    run(extra=('--policy', 'replace'))
+    assert ET.fromstring(rc.read_text()).find('./theme/font[@place="ActiveWindow"]/size').text == '16'
+    assert ET.fromstring(rc.read_text()).find('./theme/font[@place="ActiveWindow"]/weight').text == 'bold'
+    assert (theme / 'close-active.svg').read_text() != 'manual asset'
+    assert (theme / 'max-active.svg').exists()
+    assert (theme / 'extra.txt').read_text() == 'keep extra'
+    assert override.read_text().startswith('window.*.title.bg.color: #123456')
+    assert override.read_text().count('# BEGIN HoloNight appearance') == 1
+    assert 'labwc/overrides' not in run('status')
+    state = json.loads(state_path.read_text())
+    assert 'legacy/null' not in state['entries']
+    assert state['entries']['labwc/font/ActiveWindow/size']['original'] is None
+    assert state['entries']['labwc/file/close-active.svg']['original'] == 'manual asset'
+    backups = list(state_path.parent.glob('appearance-backup-*'))
+    assert len(backups) == 1
+    manifest = json.loads((backups[0] / 'manifest.json').read_text())
+    assert manifest[str(theme / 'max-active.svg')] is None
+    assert (backups[0] / manifest[str(rc)]).read_text().find('<size>16</size>') != -1  # other fonts still exist
+    run(extra=('--policy', 'replace'))
+    assert json.loads(state_path.read_text())['entries']['labwc/file/close-active.svg']['original'] == 'manual asset'
+    assert override.read_text().count('# BEGIN HoloNight appearance') == 1
+    # Background sync must not move its block past a later custom overlapping rule.
+    override.write_text(override.read_text() + 'window.active.title.bg.color: #fedcba\n')
+    before_override = override.read_text()
+    appearance.write_text(fixture.replace('holonight-dark', 'holonight-light'))
+    assert run()['labwc/overrides']['status'] == 'conflict'
+    assert override.read_text() == before_override
+    run(extra=('--policy', 'replace'))
+    assert override.read_text().endswith('# END HoloNight appearance\n')
+    assert 'window.active.title.bg.color: #fedcba' in override.read_text()
+    # Preserve later override edits individually, release ownership, and retain unrelated rules.
+    override.write_text(override.read_text().replace('window.active.title.bg.color: ', 'window.active.title.bg.color: #manual #'))
+    rc.write_text(rc.read_text().replace('<size>16</size>', '<size>27</size>', 1))
+    run('revert')
+    assert (theme / 'close-active.svg').read_text() == 'manual asset'
+    assert (theme / 'extra.txt').read_text() == 'keep extra'
+    assert '# BEGIN HoloNight appearance' not in override.read_text()
+    assert '#manual' in override.read_text() and 'menu.items.font: custom' in override.read_text()
+    assert json.loads(state_path.read_text())['entries'] == {}
+    run(extra=('--policy', 'replace'))
+    # Backup failure prevents even independent GTK updates.
+    unreadable = theme / 'extra.txt'
+    unreadable.chmod(0)
+    before = rc.read_bytes()
+    try:
+        assert run(extra=('--policy', 'replace'), check=False)['backup']['status'] == 'error'
+        assert rc.read_bytes() == before
+    finally:
+        unreadable.chmod(0o600)
+    # Theme selection is respected even under explicit replacement.
+    rc.write_text(rc.read_text().replace('HoloNight', 'Other'))
+    before = (theme / 'themerc').read_bytes()
+    assert run(extra=('--policy', 'replace'))['labwc/selection']['status'] == 'delegated'
+    assert (theme / 'themerc').read_bytes() == before
 print('labwc CLI checks passed')

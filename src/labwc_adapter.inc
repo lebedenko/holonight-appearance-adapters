@@ -9,7 +9,7 @@ QString labwcDirectory() {
   if (!labwcConfig().isEmpty()) {
     return labwcConfig();
   }
-  const auto managed = qEnvironmentVariable("HOLONIGHT_LABWC_CONFIG_DIR");
+  auto managed = qEnvironmentVariable("HOLONIGHT_LABWC_CONFIG_DIR");
   if (!managed.isEmpty()) {
     return managed;
   }
@@ -107,19 +107,29 @@ const QString overrideBegin = "# BEGIN HoloNight appearance\n";
 const QString overrideEnd = "# END HoloNight appearance\n";
 std::optional<QString> overrideValue(const QString& path) {
   const auto file = fileValue(path);
-  if (!file) return std::nullopt;
+  if (!file) {
+    return std::nullopt;
+  }
   const auto begin = file->indexOf(overrideBegin);
   const auto end = file->indexOf(overrideEnd, begin);
-  if (begin < 0 || end < 0) return std::nullopt;
+  if (begin < 0 || end < 0) {
+    return std::nullopt;
+  }
   return file->mid(begin, end + overrideEnd.size() - begin);
 }
 bool setOverrideValue(const QString& path, const std::optional<QString>& value) {
   QString file = fileValue(path).value_or(QString{});
   const auto old = overrideValue(path);
-  if ((file.contains(overrideBegin) || file.contains(overrideEnd)) && !old) return false;
-  if (old) file.remove(file.indexOf(overrideBegin), old->size());
+  if ((file.contains(overrideBegin) || file.contains(overrideEnd)) && !old) {
+    return false;
+  }
+  if (old) {
+    file.remove(file.indexOf(overrideBegin), old->size());
+  }
   if (value) {
-    if (!file.isEmpty() && !file.endsWith('\n')) file += '\n';
+    if (!file.isEmpty() && !file.endsWith('\n')) {
+      file += '\n';
+    }
     file += *value;
   }
   return setFileValue(path, file);
@@ -128,28 +138,44 @@ bool setOverrideValue(const QString& path, const std::optional<QString>& value) 
 bool releaseChangedOverride(const QJsonObject& entry) {
   const QString path = entry["target"].toString();
   const auto current = overrideValue(path);
-  if (!current) return true;
+  if (!current) {
+    return true;
+  }
   const QStringList managed = entry["last"].toString().split('\n');
   QStringList retained;
   for (const auto& line : current->split('\n')) {
-    if (line.isEmpty() || line == overrideBegin.trimmed() || line == overrideEnd.trimmed()) continue;
-    if (!managed.contains(line)) retained.append(line);
+    if (line.isEmpty() || line == overrideBegin.trimmed() || line == overrideEnd.trimmed()) {
+      continue;
+    }
+    if (!managed.contains(line)) {
+      retained.append(line);
+    }
   }
   auto file = fileValue(path).value_or(QString{});
   file.remove(file.indexOf(*current), current->size());
   const auto original = originalValue(entry, std::nullopt);
-  if (original) file += *original;
-  if (retained.isEmpty()) return setFileValue(path, file);
-  if (!file.isEmpty() && !file.endsWith('\n')) file += '\n';
+  if (original) {
+    file += *original;
+  }
+  if (retained.isEmpty()) {
+    return setFileValue(path, file);
+  }
+  if (!file.isEmpty() && !file.endsWith('\n')) {
+    file += '\n';
+  }
   return setFileValue(path, file + retained.join('\n') + '\n');
 }
 std::optional<QString> labwcCurrent(const QJsonObject& entry) {
-  if (entry["kind"] == "labwc-override") return overrideValue(entry["target"].toString());
+  if (entry["kind"] == "labwc-override") {
+    return overrideValue(entry["target"].toString());
+  }
   return entry["kind"].toString() == "labwc-file" ? fileValue(entry["target"].toString())
                                                   : labwcFontValue(entry["target"].toString(), entry["key"].toString());
 }
 bool labwcSet(const QJsonObject& entry, const std::optional<QString>& value) {
-  if (entry["kind"] == "labwc-override") return setOverrideValue(entry["target"].toString(), value);
+  if (entry["kind"] == "labwc-override") {
+    return setOverrideValue(entry["target"].toString(), value);
+  }
   return entry["kind"].toString() == "labwc-file"
              ? setFileValue(entry["target"].toString(), value)
              : setLabwcFontValue(entry["target"].toString(), entry["key"].toString(), value);
@@ -190,7 +216,9 @@ void labwcOverrides(const QMap<QString, QByteArray>& files, QList<Output>& outpu
     return;
   }
   const auto block = overrideValue(labwcDirectory() + "/themerc-override");
-  if (block) *contents = contents->mid(contents->indexOf(*block) + block->size());
+  if (block) {
+    *contents = contents->mid(contents->indexOf(*block) + block->size());
+  }
   QStringList overlap;
   const auto theme = QString::fromUtf8(files["themerc"]);
   for (const auto& raw : contents->split('\n')) {
@@ -225,8 +253,12 @@ QMap<QString, QString> labwcExpected(const Holonight::ResolvedAppearance& resolv
   for (auto it = files.begin(); it != files.end(); ++it) {
     expected["labwc/file/" + it.key()] = QString::fromUtf8(it.value());
   }
-  for (const QString& place : {QStringLiteral("ActiveWindow"), QStringLiteral("InactiveWindow"),
-                               QStringLiteral("MenuItem"), QStringLiteral("MenuHeader")}) {
+  for (const QString& place : {
+           QStringLiteral("ActiveWindow"),
+           QStringLiteral("InactiveWindow"),
+           QStringLiteral("MenuItem"),
+           QStringLiteral("MenuHeader"),
+       }) {
     expected["labwc/font/" + place + "/name"] = resolved.ui_font;
     expected["labwc/font/" + place + "/size"] = QString::number(qRound(resolved.ui_font_size * 96.0 / 72.0));
   }
@@ -395,7 +427,9 @@ bool commitLabwcFiles(const QString& directory, const QString& configPath, const
   }
   for (auto it = intended.begin(); it != intended.end(); ++it) {
     const auto entry = it.value().toObject();
-    if (entry["kind"] == "labwc-override" && !labwcSet(entry, entry["last"].toString())) return false;
+    if (entry["kind"] == "labwc-override" && !labwcSet(entry, entry["last"].toString())) {
+      return false;
+    }
   }
   return true;
 }
@@ -425,6 +459,62 @@ bool recordLabwcChanges(const QMap<QString, QString>& expected, const QString& d
   }
   return changed;
 }
+bool recordLabwcOverride(bool assetsOwned, const QMap<QString, QByteArray>& files, QJsonObject& entries,
+                         const QList<Output>& outputs, QList<Undo>& undo, QJsonObject& before, QJsonObject& intended,
+                         bool& changed) {
+  const QString overridePath = labwcDirectory() + "/themerc-override";
+  const QString overrideId = "labwc/overrides/appearance";
+  const auto oldOverride = entries.value(overrideId).toObject();
+  const bool overrideConflict = std::ranges::any_of(
+      outputs, [](const Output& output) { return output.name == "labwc/overrides" && output.status == "conflict"; });
+  if (assetsOwned && (replacementPolicy().replace || (!oldOverride.isEmpty() && !overrideConflict))) {
+    QString desired = overrideBegin + QString::fromUtf8(files["themerc"]) + overrideEnd;
+    const auto current = overrideValue(overridePath);
+    if (replacementPolicy().replace || !manuallyChanged(oldOverride, current)) {
+      if (QFileInfo(overridePath).isSymLink()) {
+        return false;
+      }
+      const auto entry = stateEntry(baseline(oldOverride, current), desired, "labwc-override", overridePath);
+      before[overrideId] = stateEntry(current, desired, "labwc-override", overridePath);
+      intended[overrideId] = entry;
+      entries[overrideId] = entry;
+      const bool misplaced =
+          replacementPolicy().replace && current && !fileValue(overridePath).value_or(QString{}).endsWith(*current);
+      if (current != std::optional<QString>(desired) || misplaced) {
+        undo.append({.kind = Undo::Kind::LabwcOverride, .target = overridePath, .key = {}, .value = current});
+        changed = true;
+      }
+    }
+  }
+  return true;
+}
+
+bool prepareLabwcExpected(QMap<QString, QString>& expected, const QJsonObject& entries, QList<Output>& outputs,
+                          const QString& directory, const QString& configPath) {
+  if (QFileInfo(configPath).isSymLink()) {
+    return false;
+  }
+  for (auto it = expected.begin(); it != expected.end(); ++it) {
+    const auto old = entries.value(it.key()).toObject();
+    const QString target = it.key().startsWith("labwc/file/") ? directory + '/' + it.key().mid(11) : configPath;
+    if ((!old.isEmpty() && old["target"].toString() != target) || QFileInfo(target).isSymLink()) {
+      return false;
+    }
+  }
+  if (!replacementPolicy().replace) {
+    for (auto it = expected.begin(); it != expected.end();) {
+      if (it.key().startsWith("labwc/font/") &&
+          manuallyChanged(entries.value(it.key()).toObject(), labwcFontValue(configPath, it.key().mid(11)))) {
+        outputs.append({.name = it.key(), .status = "conflict", .mode = "live", .diagnostic = "custom font preserved"});
+        it = expected.erase(it);
+      } else {
+        ++it;
+      }
+    }
+  }
+  return true;
+}
+
 bool applyLabwc(const Holonight::ResolvedAppearance& appearance, QJsonObject& entries, QList<Output>& outputs,
                 QList<Undo>& undo) {
   if (!labwcSelected(outputs)) {
@@ -433,36 +523,26 @@ bool applyLabwc(const Holonight::ResolvedAppearance& appearance, QJsonObject& en
   }
   QMap<QString, QByteArray> files;
   auto expected = labwcExpected(appearance, &files);
-  if (!replacePolicy) labwcOverrides(files, outputs);
+  if (!replacementPolicy().replace) {
+    labwcOverrides(files, outputs);
+  }
   const QString directory = labwcThemeDirectory();
   const QString configPath = labwcDirectory() + "/rc.xml";
-  if (QFileInfo(configPath).isSymLink()) return false;
-  for (auto it = expected.begin(); it != expected.end(); ++it) {
-    const auto old = entries.value(it.key()).toObject();
-    const QString target = it.key().startsWith("labwc/file/") ? directory + '/' + it.key().mid(11) : configPath;
-    if ((!old.isEmpty() && old["target"].toString() != target) || QFileInfo(target).isSymLink()) return false;
+  if (!prepareLabwcExpected(expected, entries, outputs, directory, configPath)) {
+    return false;
   }
   const bool installedFallback = isInstalledLabwcFallback(directory);
-  if (!replacePolicy) {
-    for (auto it = expected.begin(); it != expected.end();) {
-      if (it.key().startsWith("labwc/font/") &&
-          manuallyChanged(entries.value(it.key()).toObject(), labwcFontValue(configPath, it.key().mid(11)))) {
-        outputs.append({.name = it.key(), .status = "conflict", .mode = "live", .diagnostic = "custom font preserved"});
-        it = expected.erase(it);
-      } else
-        ++it;
-    }
-  }
 
-  const bool assetsOwned =
-      replacePolicy || ownsLabwcOutputs(expected, entries, directory, configPath, installedFallback, outputs);
+  const bool assetsOwned = replacementPolicy().replace ||
+                           ownsLabwcOutputs(expected, entries, directory, configPath, installedFallback, outputs);
   if (!assetsOwned) {
     files.clear();
     for (auto it = expected.begin(); it != expected.end();) {
-      if (it.key().startsWith("labwc/file/"))
+      if (it.key().startsWith("labwc/file/")) {
         it = expected.erase(it);
-      else
+      } else {
         ++it;
+      }
     }
   }
   // Stage every asset, then replace the directory using same-filesystem renames.
@@ -482,27 +562,8 @@ bool applyLabwc(const Holonight::ResolvedAppearance& appearance, QJsonObject& en
   QJsonObject before;
   QJsonObject intended;
   bool changed = recordLabwcChanges(expected, directory, configPath, entries, undo, before, intended);
-  const QString overridePath = labwcDirectory() + "/themerc-override";
-  const QString overrideId = "labwc/overrides/appearance";
-  const auto oldOverride = entries.value(overrideId).toObject();
-  const bool overrideConflict = std::ranges::any_of(
-      outputs, [](const Output& output) { return output.name == "labwc/overrides" && output.status == "conflict"; });
-  if (assetsOwned && (replacePolicy || (!oldOverride.isEmpty() && !overrideConflict))) {
-    QString desired = overrideBegin + QString::fromUtf8(files["themerc"]) + overrideEnd;
-    const auto current = overrideValue(overridePath);
-    if (replacePolicy || !manuallyChanged(oldOverride, current)) {
-      if (QFileInfo(overridePath).isSymLink()) return false;
-      const auto entry = stateEntry(baseline(oldOverride, current), desired, "labwc-override", overridePath);
-      before[overrideId] = stateEntry(current, desired, "labwc-override", overridePath);
-      intended[overrideId] = entry;
-      entries[overrideId] = entry;
-      const bool misplaced =
-          replacePolicy && current && !fileValue(overridePath).value_or(QString{}).endsWith(*current);
-      if (current != std::optional<QString>(desired) || misplaced) {
-        undo.append({.kind = Undo::Kind::LabwcOverride, .target = overridePath, .key = {}, .value = current});
-        changed = true;
-      }
-    }
+  if (!recordLabwcOverride(assetsOwned, files, entries, outputs, undo, before, intended, changed)) {
+    return false;
   }
   if (changed) {
     // Distinguish recovery from an older identical ownership snapshot.
@@ -524,14 +585,16 @@ void reloadLabwc(QList<Output>& outputs) {
   if (!std::ranges::any_of(outputs, [](const Output& output) {
         return (output.name == "labwc/theme" && output.status == "applied") ||
                (output.name.startsWith("labwc/") && output.status == "restored");
-      }))
+      })) {
     return;
+  }
   auto unavailable = [&outputs] {
-    outputs.append(
-        {.name = "labwc/reload",
-         .status = "unavailable",
-         .mode = "live",
-         .diagnostic = "generated assets updated; live compositor reload unavailable (LABWC_PID missing or invalid)"});
+    outputs.append({
+        .name = "labwc/reload",
+        .status = "unavailable",
+        .mode = "live",
+        .diagnostic = "generated assets updated; live compositor reload unavailable (LABWC_PID missing or invalid)",
+    });
   };
   // LABWC_PID is supplied by labwc to its session children. Validate ownership and executable.
   bool valid = false;

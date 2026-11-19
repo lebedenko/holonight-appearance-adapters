@@ -6,7 +6,7 @@
 
 namespace {
 volatile std::sig_atomic_t reloads = 0;
-void reload(int) { reloads = 1; }
+void reload(int /*unused*/) { reloads = 1; }
 }  // namespace
 int main() {
   std::signal(SIGHUP, reload);

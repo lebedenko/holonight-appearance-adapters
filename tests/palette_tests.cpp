@@ -13,10 +13,12 @@ Holonight::Adapters::Snapshot snapshot() {
   Holonight::Adapters::Snapshot result;
   result.contract_version = Holonight::Adapters::kContractVersion;
   for (std::size_t index = 0; index < result.colors.size(); ++index) {
-    result.colors.at(index) = {.red = static_cast<std::uint8_t>(index + 1),
-                               .green = static_cast<std::uint8_t>(index + 31),
-                               .blue = static_cast<std::uint8_t>(index + 61),
-                               .alpha = static_cast<std::uint8_t>(index + 91)};
+    result.colors.at(index) = {
+        .red = static_cast<std::uint8_t>(index + 1),
+        .green = static_cast<std::uint8_t>(index + 31),
+        .blue = static_cast<std::uint8_t>(index + 61),
+        .alpha = static_cast<std::uint8_t>(index + 91),
+    };
   }
   return result;
 }
@@ -37,9 +39,10 @@ void expectDefinitions(const std::string& css, const Holonight::Adapters::Snapsh
 }
 
 void expectPaletteOnly(const std::string& css) {
-  constexpr std::array forbidden{"padding",      "margin",    "min-width",   "min-height", "font",
-                                 "-gtk-icon-",   "animation", "transition",  "@import",    "url(",
-                                 "settings.ini", "gsettings", "environment", "GTK_THEME",  "--"};
+  constexpr std::array forbidden{
+      "padding", "margin", "min-width",    "min-height", "font",        "-gtk-icon-", "animation", "transition",
+      "@import", "url(",   "settings.ini", "gsettings",  "environment", "GTK_THEME",  "--",
+  };
   for (const std::string_view token : forbidden) {
     EXPECT_EQ(css.find(token), std::string::npos) << token;
   }

@@ -20,6 +20,27 @@ QByteArray buttonSvg(const SemanticAppearance& appearance, const QString& name, 
              .arg(path, foreground.name());
   return svg.toUtf8();
 }
+void addButtonAssets(const SemanticAppearance& appearance, QMap<QString, QByteArray>& files) {
+  const QMap<QString, QString> paths{
+      {"iconify", "M2 11h10"},
+      {"close", "M3 3l8 8M11 3l-8 8"},
+      {"max", "M2 2h10v10H2z"},
+      {"max_toggled", "M2 5h7v7H2zM5 5V2h7v7H9"},
+      {"menu", "M2 3h10M2 7h10M2 11h10"},
+      {"shade", "M3 9l4-4 4 4"},
+      {"shade_toggled", "M3 5l4 4 4-4"},
+      {"desk", "M7 2v10M2 7h10"},
+      {"desk_toggled", "M2 7l3 3 7-7"},
+  };
+  for (auto it = paths.begin(); it != paths.end(); ++it) {
+    for (bool active : {true, false}) {
+      for (bool hover : {false, true}) {
+        files[it.key() + (hover ? "_hover" : "") + (active ? "-active.svg" : "-inactive.svg")] =
+            buttonSvg(appearance, it.key(), it.value(), active, hover);
+      }
+    }
+  }
+}
 }  // namespace
 
 QMap<QString, QByteArray> labwcTheme(const SemanticAppearance& appearance) {
@@ -80,25 +101,7 @@ QMap<QString, QByteArray> labwcTheme(const SemanticAppearance& appearance) {
     color("snapping.overlay." + kind + ".border.color", appearance.accent);
   }
   files["themerc"] = theme.toUtf8();
-  const QMap<QString, QString> paths{
-      {"iconify", "M2 11h10"},
-      {"close", "M3 3l8 8M11 3l-8 8"},
-      {"max", "M2 2h10v10H2z"},
-      {"max_toggled", "M2 5h7v7H2zM5 5V2h7v7H9"},
-      {"menu", "M2 3h10M2 7h10M2 11h10"},
-      {"shade", "M3 9l4-4 4 4"},
-      {"shade_toggled", "M3 5l4 4 4-4"},
-      {"desk", "M7 2v10M2 7h10"},
-      {"desk_toggled", "M2 7l3 3 7-7"},
-  };
-  for (auto it = paths.begin(); it != paths.end(); ++it) {
-    for (bool active : {true, false}) {
-      for (bool hover : {false, true}) {
-        files[it.key() + (hover ? "_hover" : "") + (active ? "-active.svg" : "-inactive.svg")] =
-            buttonSvg(appearance, it.key(), it.value(), active, hover);
-      }
-    }
-  }
+  addButtonAssets(appearance, files);
   return files;
 }
 }  // namespace Holonight::Adapters

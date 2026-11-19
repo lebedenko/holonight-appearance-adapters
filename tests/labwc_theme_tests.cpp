@@ -6,6 +6,32 @@
 
 #include <gtest/gtest.h>
 
+namespace {
+void expectButton(const QMap<QString, QByteArray>& files, const Holonight::SemanticAppearance& appearance,
+                  const char* name, bool active, bool hover) {
+  const auto svg = files.value(QString(name) + (hover ? "_hover" : "") + (active ? "-active.svg" : "-inactive.svg"));
+  QColor foreground = active ? appearance.primary_text : appearance.disabled_text;
+  if (hover) {
+    foreground = QString(name) == "close" ? appearance.error_foreground : appearance.primary_text;
+  }
+  EXPECT_TRUE(svg.contains(("stroke=\"" + foreground.name() + "\"").toUtf8()));
+  if (hover) {
+    EXPECT_TRUE(svg.contains(
+        ("fill=\"" + (QString(name) == "close" ? appearance.error : appearance.hover_surface).name() + "\"").toUtf8()));
+  }
+}
+void expectButtons(const QMap<QString, QByteArray>& files, const Holonight::SemanticAppearance& appearance) {
+  for (const bool active : {false, true}) {
+    for (const bool hover : {false, true}) {
+      for (const auto& name :
+           {"close", "max", "iconify", "menu", "shade", "shade_toggled", "desk", "desk_toggled", "max_toggled"}) {
+        expectButton(files, appearance, name, active, hover);
+      }
+    }
+  }
+}
+}  // namespace
+
 TEST(LabwcTheme, ExactSemanticColorsAcrossSchemesAndAccents) {
   for (const auto& variant : Holonight::themeVariants()) {
     for (const auto& accent : {"default", "cyan", "blue", "violet", "yellow"}) {
@@ -47,23 +73,7 @@ TEST(LabwcTheme, ExactSemanticColorsAcrossSchemesAndAccents) {
         expectColor("menu.title.bg.color", appearance.raised_surface);
         expectColor("menu.title.text.color", appearance.secondary_text);
         EXPECT_FALSE(theme.contains(".enabled:"));
-        for (const bool active : {false, true}) {
-          for (const bool hover : {false, true}) {
-            for (const auto& name :
-                 {"close", "max", "iconify", "menu", "shade", "shade_toggled", "desk", "desk_toggled", "max_toggled"}) {
-              const auto svg =
-                  files.value(QString(name) + (hover ? "_hover" : "") + (active ? "-active.svg" : "-inactive.svg"));
-              const auto foreground =
-                  hover ? (QString(name) == "close" ? appearance.error_foreground : appearance.primary_text)
-                        : (active ? appearance.primary_text : appearance.disabled_text);
-              EXPECT_TRUE(svg.contains(("stroke=\"" + foreground.name() + "\"").toUtf8()));
-              if (hover)
-                EXPECT_TRUE(svg.contains(
-                    ("fill=\"" + (QString(name) == "close" ? appearance.error : appearance.hover_surface).name() + "\"")
-                        .toUtf8()));
-            }
-          }
-        }
+        expectButtons(files, appearance);
       }
     }
   }
@@ -71,10 +81,19 @@ TEST(LabwcTheme, ExactSemanticColorsAcrossSchemesAndAccents) {
 
 TEST(LabwcTheme, ExactMenuGeometry) {
   const auto theme = Holonight::Adapters::labwcTheme({}).value("themerc");
-  for (const auto* line : {"menu.border.width: 1", "menu.width.min: 244", "menu.width.max: 360",
-                           "menu.items.padding.x: 12", "menu.items.padding.y: 6", "menu.separator.width: 1",
-                           "menu.separator.padding.width: 8", "menu.separator.padding.height: 5", "menu.overlap.x: 0",
-                           "menu.overlap.y: 0", "menu.title.text.justify: Left"}) {
+  for (const auto* line : {
+           "menu.border.width: 1",
+           "menu.width.min: 244",
+           "menu.width.max: 360",
+           "menu.items.padding.x: 12",
+           "menu.items.padding.y: 6",
+           "menu.separator.width: 1",
+           "menu.separator.padding.width: 8",
+           "menu.separator.padding.height: 5",
+           "menu.overlap.x: 0",
+           "menu.overlap.y: 0",
+           "menu.title.text.justify: Left",
+       }) {
     EXPECT_TRUE(theme.contains(QByteArray(line) + '\n')) << line;
   }
 }

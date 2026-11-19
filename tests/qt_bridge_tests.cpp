@@ -14,17 +14,19 @@
 namespace {
 
 Holonight::ResolvedAppearance defaults() {
-  return {.scheme = QStringLiteral("holonight-dark"),
-          .accent = QStringLiteral("blue"),
-          .theme_scheme = Holonight::ThemeSchemeKind::HoloNightDark,
-          .color_mode = Holonight::ColorMode::Dark,
-          .ui_font = QStringLiteral("Noto Sans 🌙"),
-          .ui_font_size = 12,
-          .monospace_font = QStringLiteral("JetBrains Mono"),
-          .monospace_font_size = 13,
-          .icon_theme = QStringLiteral("HoloNight"),
-          .fallback_icon_theme = QStringLiteral("Papirus"),
-          .cursor_theme = QStringLiteral("HoloNight")};
+  return {
+      .scheme = QStringLiteral("holonight-dark"),
+      .accent = QStringLiteral("blue"),
+      .theme_scheme = Holonight::ThemeSchemeKind::HoloNightDark,
+      .color_mode = Holonight::ColorMode::Dark,
+      .ui_font = QStringLiteral("Noto Sans 🌙"),
+      .ui_font_size = 12,
+      .monospace_font = QStringLiteral("JetBrains Mono"),
+      .monospace_font_size = 13,
+      .icon_theme = QStringLiteral("HoloNight"),
+      .fallback_icon_theme = QStringLiteral("Papirus"),
+      .cursor_theme = QStringLiteral("HoloNight"),
+  };
 }
 
 }  // namespace
@@ -45,8 +47,10 @@ TEST(QtBridge, SerializesDeterministicallyAndRoundTripsThroughJsonGlib) {
 }
 
 TEST(QtBridge, RoundTripsEveryBuiltInSchemeAndAccent) {
-  const std::array accents{QStringLiteral("default"), QStringLiteral("cyan"), QStringLiteral("blue"),
-                           QStringLiteral("violet"), QStringLiteral("yellow")};
+  const std::array accents{
+      QStringLiteral("default"), QStringLiteral("cyan"),   QStringLiteral("blue"),
+      QStringLiteral("violet"),  QStringLiteral("yellow"),
+  };
   for (const auto& variant : Holonight::themeVariants()) {
     for (const auto& accent : accents) {
       auto input = defaults();

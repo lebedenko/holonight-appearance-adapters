@@ -20,6 +20,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLockFile>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QTemporaryDir>
@@ -38,6 +39,7 @@
 #endif
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 
 namespace {

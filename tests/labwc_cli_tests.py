@@ -19,6 +19,24 @@ with tempfile.TemporaryDirectory() as temporary:
     env = dict(os.environ, HOME=str(root), XDG_CONFIG_HOME=str(root / 'config'),
                XDG_DATA_HOME=str(root / 'data'), XDG_STATE_HOME=str(root / 'state'),
                XDG_CONFIG_DIRS=str(root / 'system'), GSETTINGS_BACKEND='keyfile', LABWC_PID='', HOLONIGHT_LABWC_CONFIG_DIR=str(root / 'custom'))
+    for key in ('HOLONIGHT_SESSION_READY', 'HOLONIGHT_SESSION_MODE', 'HOLONIGHT_SESSION_RUN_DIR'):
+        env.pop(key, None)
+    tools = root / 'bin'
+    tools.mkdir()
+    systemctl = tools / 'systemctl'
+    reload_log = root / 'reload.log'
+    systemctl.write_text('''#!/bin/sh
+case "$*" in
+  "--user show -p ActiveState -p MainPID wayland-wm@labwc.service")
+    printf 'ActiveState=%s\nMainPID=%s\n' "${TEST_ACTIVE:-inactive}" "${TEST_MAIN_PID:-0}" ;;
+  "--user reload wayland-wm@labwc.service")
+    printf 'reload\n' >> "$TEST_RELOAD_LOG"
+    exit "${TEST_RELOAD_STATUS:-0}" ;;
+  *) exit 99 ;;
+esac
+''')
+    systemctl.chmod(0o755)
+    env['PATH'] = str(tools) + os.pathsep + env['PATH']
     appearance = root / 'appearance.toml'
     fixture = (Path(__file__).with_name('adapter_cli_tests.sh').read_text().split("<<'EOF'\n", 1)[1].split('\nEOF', 1)[0])
     appearance.write_text(fixture)
@@ -158,7 +176,7 @@ with tempfile.TemporaryDirectory() as temporary:
     with subprocess.Popen([sys.argv[2]], stdout=subprocess.PIPE, text=True) as compositor:
         try:
             assert compositor.stdout.readline().strip() == 'ready'
-            live_env = dict(env, LABWC_PID=str(compositor.pid))
+            live_env = dict(env, LABWC_PID=str(compositor.pid), TEST_ACTIVE='active', TEST_MAIN_PID='1')
             appearance.write_text(fixture.replace('holonight-dark', 'holonight-mocha').replace('accent = "blue"', 'accent = "violet"'))
             result = run(environment=live_env)
             assert result['labwc/theme']['status'] == 'applied'
@@ -173,6 +191,24 @@ with tempfile.TemporaryDirectory() as temporary:
             compositor.wait(timeout=5)
     appearance.write_text(fixture)
     run()
+    # A managed compositor needs no readable executable link. PID matching is mandatory.
+    managed = dict(env, HOLONIGHT_SESSION_READY='1', LABWC_PID='1000000000',
+                   TEST_ACTIVE='active', TEST_MAIN_PID='1000000000', TEST_RELOAD_LOG=str(reload_log))
+    alternate = fixture.replace('holonight-dark', 'holonight-mocha')
+    appearance.write_text(alternate)
+    assert 'labwc/reload' not in run(environment=managed)
+    assert reload_log.read_text() == 'reload\n'
+    appearance.write_text(fixture)
+    result = run(environment=dict(managed, TEST_MAIN_PID='1000000001'))
+    assert 'does not match' in result['labwc/reload']['diagnostic']
+    assert reload_log.read_text() == 'reload\n'
+    appearance.write_text(alternate)
+    assert 'missing or inactive' in run(environment=dict(managed, TEST_ACTIVE='inactive'))['labwc/reload']['diagnostic']
+    appearance.write_text(fixture)
+    result = run(environment=dict(managed, TEST_RELOAD_STATUS='1'))
+    assert result['labwc/theme']['status'] == 'applied'
+    assert 'reload failed' in result['labwc/reload']['diagnostic']
+    assert reload_log.read_text() == 'reload\nreload\n'
     # A changed title font is preserved and blocks a complete labwc update.
     rc.write_text(rc.read_text().replace('Inter', 'External'))
     assert run()['labwc/font/ActiveWindow/name']['status'] == 'conflict'

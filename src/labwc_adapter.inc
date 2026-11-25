@@ -588,33 +588,65 @@ void reloadLabwc(QList<Output>& outputs) {
       })) {
     return;
   }
-  auto unavailable = [&outputs] {
+  auto unavailable = [&outputs](const QString& reason) {
     outputs.append({
         .name = "labwc/reload",
         .status = "unavailable",
         .mode = "live",
-        .diagnostic = "generated assets updated; live compositor reload unavailable (LABWC_PID missing or invalid)",
+        .diagnostic = "generated assets remain valid; live compositor reload unavailable: " + reason,
     });
   };
-  // LABWC_PID is supplied by labwc to its session children. Validate ownership and executable.
   bool valid = false;
   const auto pid = qEnvironmentVariable("LABWC_PID").toLongLong(&valid);
-  if (!valid || pid <= 1) {
-    unavailable();
+  if (!valid || pid <= 1 || pid > std::numeric_limits<pid_t>::max()) {
+    unavailable("LABWC_PID missing or invalid");
     return;
   }
+
+  constexpr auto unit = "wayland-wm@labwc.service";
+  auto systemctl = [](const QStringList& arguments) -> std::optional<QByteArray> {
+    QProcess process;
+    process.start("systemctl", arguments);
+    if (!process.waitForStarted(1000)) {
+      return std::nullopt;
+    }
+    if (!process.waitForFinished(5000)) {
+      process.kill();
+      process.waitForFinished();
+      return std::nullopt;
+    }
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+      return std::nullopt;
+    }
+    return process.readAllStandardOutput();
+  };
+  const auto properties = systemctl({"--user", "show", "-p", "ActiveState", "-p", "MainPID", unit});
+  const auto lines = properties.value_or(QByteArray{}).split('\n');
+  const bool active = lines.contains("ActiveState=active");
+  const bool ownsPid = lines.contains("MainPID=" + QByteArray::number(pid));
+  const bool managed = qEnvironmentVariable("HOLONIGHT_SESSION_READY") == "1" ||
+                       qEnvironmentVariable("HOLONIGHT_SESSION_MODE") == "uwsm" ||
+                       qEnvironmentVariableIsSet("HOLONIGHT_SESSION_RUN_DIR");
+  if (active && ownsPid) {
+    if (!systemctl({"--user", "reload", unit})) {
+      unavailable("wayland-wm@labwc.service reload failed");
+    }
+    return;
+  }
+  if (managed) {
+    unavailable(active ? "wayland-wm@labwc.service MainPID does not match LABWC_PID"
+                       : "wayland-wm@labwc.service is missing or inactive");
+    return;
+  }
+
+  // Standalone labwc supplies LABWC_PID to its session children.
   const QString proc = "/proc/" + QString::number(pid);
   if (QFileInfo(proc).ownerId() != static_cast<uint>(getuid()) ||
       QFileInfo(QFile::symLinkTarget(proc + "/exe")).fileName() != "labwc") {
-    unavailable();
+    unavailable("LABWC_PID is not an owned labwc process");
     return;
   }
   if (::kill(static_cast<pid_t>(pid), SIGHUP) != 0) {
-    outputs.append({
-        .name = "labwc/reload",
-        .status = "unavailable",
-        .mode = "live",
-        .diagnostic = "reload failed; generated assets remain valid",
-    });
+    unavailable("standalone labwc reload failed");
   }
 }

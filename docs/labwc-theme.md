@@ -87,11 +87,11 @@ recovers an interrupted apply on the next operation; external edits during recov
 are preserved and reported as errors. The journal remains available until recovery
 can succeed. Revert writes are rolled back if saving the updated ownership state fails.
 
-After a successful labwc change, the adapter signals the live compositor once when
-`LABWC_PID` identifies a same-user labwc process. This is the same SIGHUP mechanism
-used by `labwc --reconfigure`. Reload failures report `unavailable` and retain valid
-assets. Without an identified process, reload manually. Idempotent apply does not
-reload.
+After a successful labwc change, the adapter reloads the active UWSM user unit
+`wayland-wm@labwc.service` when its main PID matches `LABWC_PID`. Standalone
+sessions use SIGHUP after checking the process owner and executable. Reload
+failures report `unavailable` and retain the generated assets. An unchanged apply
+does not reload.
 
 ## Disable and recover
 
@@ -165,4 +165,4 @@ A conflict skips the whole labwc update, preserving both generated assets and rc
 
 For the observed `ActiveWindow/size` mismatch, ownership records `13` while rc.xml contains `12`; the historical writer is unknown. Back up the labwc configuration and ownership state before editing. In the reported rc.xml target, reconcile only `<font place="ActiveWindow"><size>` to the recorded `13`, keeping unrelated XML unchanged. Review the backup/diff, then use Settings → Integrations → Reapply appearance (or the adapter apply command). The current configured family/size and colors will then be generated, with the existing point-to-pixel conversion. Do not delete ownership state or adopt modified files silently. No host reconciliation is performed automatically.
 
-When generated assets update but a live compositor reload is unavailable, the result reports that explicitly. Reapply from the labwc session with a valid compositor-provided `LABWC_PID`, or reload the compositor manually after reviewing the update.
+When generated assets update but a live compositor reload is unavailable, the result reports that explicitly. Review the update, then use `systemctl --user reload wayland-wm@labwc.service` in a managed labwc session or `labwc --reconfigure` in a standalone session.
